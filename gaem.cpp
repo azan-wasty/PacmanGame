@@ -3,7 +3,7 @@
 #include <vector>
 #include <cstdlib>
 #include <ctime>
-
+using namespace std;
 using namespace sf;
 
 int main() {
@@ -21,40 +21,42 @@ int main() {
 
     // Load font
     Font font;
-    if (!font.loadFromFile("PressStart2P-Regular.ttf")) { // Replace with your font file
+    if (!font.loadFromFile("ArcadeClassic.ttf")) { // Replace with your font file
         return -1;
     }
 
     // Title text
+ // Title (moved from y = 60 to y = 200)
     Text title("PAC-MAN", font, 80);
     title.setFillColor(Color::Yellow);
-    title.setPosition(windowWidth / 2.f - title.getGlobalBounds().width / 2.f, 60);
+    title.setPosition(windowWidth / 2.f - title.getGlobalBounds().width / 2.f, 200);
 
-    // Menu options
-    std::vector<std::string> menuItems = { "Start Game", "Options", "Exit" };
-    std::vector<Text> menuTexts;
+    // Menu options (moved from starting y = 200 to y = 320)
+     vector< string> menuItems = { "Start Game", "Options", "Exit" };
+     vector<Text> menuTexts;
     for (size_t i = 0; i < menuItems.size(); ++i) {
         Text item(menuItems[i], font, 40);
         item.setFillColor(Color::White);
-        item.setPosition(windowWidth / 2.f - item.getGlobalBounds().width / 2.f, 200 + i * 80);
+        item.setPosition(windowWidth / 2.f - item.getGlobalBounds().width / 2.f, 320 + i * 90); // also increased spacing
         menuTexts.push_back(item);
     }
+
 
     // Flowing dots setup
     struct Dot {
         CircleShape shape;
         float speed;
     };
-    std::vector<Dot> dots;
+     vector<Dot> dots;
     const int dotCount = 100;
-    std::srand(static_cast<unsigned>(std::time(nullptr)));
+     srand(static_cast<unsigned>( time(nullptr)));
     for (int i = 0; i < dotCount; ++i) {
         CircleShape dot(2);
         dot.setFillColor(Color::White);
-        float x = static_cast<float>(std::rand() % windowWidth);
-        float y = static_cast<float>(std::rand() % windowHeight);
+        float x = static_cast<float>( rand() % windowWidth);
+        float y = static_cast<float>( rand() % windowHeight);
         dot.setPosition(x, y);
-        float speed = 1.f + static_cast<float>(std::rand() % 100) / 100.f;
+        float speed = 1.f + static_cast<float>( rand() % 100) / 100.f;
         dots.push_back({ dot, speed });
     }
 
