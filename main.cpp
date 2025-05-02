@@ -7,7 +7,7 @@
 #include <conio.h>
 using namespace std;
 using namespace sf;
-void Main() {
+void MainGame() {
     // Get screen size
     int screenWidth = GetSystemMetrics(SM_CXSCREEN);
     int screenHeight = GetSystemMetrics(SM_CYSCREEN);
@@ -95,6 +95,6 @@ void Main() {
 }
 int main() {
 
-	Main();
+	MainGame();
     return 0;
 }

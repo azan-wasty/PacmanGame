@@ -1,20 +1,20 @@
 #pragma once
 #include <map>
-#include "Animation.h"
 #include "entity.h"
+#include "animation.h"
 
-class Pacman : public Entity {
-private:
-    std::map<Direction, Texture> textures;
+class Ghost : public Entity {
+protected:
+     map<Direction, Texture> textures;
     Animation animation;
     Direction currentDirection;
     Vector2f initialPosition;
 
 public:
-    Pacman(const std::map<Direction, std::string>& spriteSheetPaths,
+    Ghost(const  map<Direction,  string>& spriteSheetPaths,
         int frameCount, int frameWidth, int frameHeight,
         float x, float y, float spd)
-        : Entity(x, y, spd), animation(0.075f), currentDirection(RIGHT), initialPosition(x, y)
+        : Entity(x, y, spd), animation(0.075f), currentDirection(LEFT), initialPosition(x, y)
     {
         for (const auto& pair : spriteSheetPaths) {
             Direction dir = pair.first;
@@ -22,7 +22,7 @@ public:
 
             Texture tex;
             if (!tex.loadFromFile(path)) {
-                cerr << "Failed to load Pacman texture: " << path << endl;
+                cerr << "Failed to load ghost texture: " << path << endl;
                 continue;
             }
             textures[dir] = tex;
@@ -32,41 +32,37 @@ public:
             }
         }
 
-        sprite.setTexture(textures[RIGHT]);
+        sprite.setTexture(textures[LEFT]);
         sprite.setPosition(position);
     }
-
-    void SetDirection(Direction dir) {
-        if (currentDirection != dir) {
-            currentDirection = dir;
-        }
-    }
-
-    void Move(Direction dir) {
-        currentDirection = dir;
-        switch (dir) {
-        case RIGHT: position.x += speed; break;
-        case UP:    position.y -= speed; break;
-        case DOWN:  position.y += speed; break;
-        case LEFT:  position.x -= speed; break;
-        }
-        sprite.setPosition(position);
-    }
-
-
-    // Getter for Pacman's position
+    // Getter for the Ghost's position
     Vector2f GetPosition() const {
         return position;
     }
+    // Check if the ghost collides with Pacman
+    bool GhostCollision(const Vector2f& pacmanPosition) {
+        // Simple collision check: if the positions are the same, it's a collision
+        
+        if (position == pacmanPosition) {
+            return true;  // Collision detected
+        }
 
-    // Stop Pacman's movement
-    void Stop() {
-
+        return false;  // No collision
+    }
+    virtual void Move(Direction dir) {
+        currentDirection = dir;
+        switch (dir) {
+        case LEFT:  position.x -= speed; break;
+        case RIGHT: position.x += speed; break;
+        case UP:    position.y -= speed; break;
+        case DOWN:  position.y += speed; break;
+        }
+        sprite.setPosition(position);
     }
 
     void Update() override {
         sprite.setTexture(textures[currentDirection]);
-        animation.update(0.075f, currentDirection, sprite);  // dt can be passed in externally if needed
+        animation.update(0.075f, currentDirection, sprite);
         sprite.setPosition(position);
     }
 

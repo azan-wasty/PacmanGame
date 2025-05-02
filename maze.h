@@ -3,7 +3,7 @@
 #include <SFML/Graphics.hpp>
 #include <vector>
 #include <string>
-
+using namespace std;
 using namespace sf;
 
 class Maze {
@@ -48,8 +48,48 @@ public:
 
         for (int i = 0; i < HEIGHT; ++i) {
             map.push_back(mapData[i]);
-            for (char c : mapData[i]) {
-                if (c == '.' || c == 'o')
+            for (int j = 0; mapData[i][j] != 0; j++) {
+                if (mapData[i][j] == '.')
+                    totalFood++;
+            }
+        }
+    }
+
+    // Reset the maze to its initial state
+    void reset() {
+        totalFood = 0; // Reset food count
+
+        // Reset map
+        const char* mapData[HEIGHT] = {
+            " ################### ",
+            " #........#........# ",
+            " #o##.###.#.###.##o# ",
+            " #.................# ",
+            " #.##.#.#####.#.##.# ",
+            " #....#...#...#....# ",
+            " ####.### # ###.#### ",
+            "    #.#   0   #.#    ",
+            "#####.# ##=## #.#####",
+            "     .  #123#  .     ",
+            "#####.# ##### #.#####",
+            "    #.#       #.#    ",
+            " ####.# ##### #.#### ",
+            " #........#........# ",
+            " #.##.###.#.###.##.# ",
+            " #o.#.....P.....#.o# ",
+            " ##.#.#.#####.#.#.## ",
+            " #....#...#...#....# ",
+            " #.######.#.######.# ",
+            " #.................# ",
+            " ################### "
+        };
+
+        // Rebuild the map and count food
+        map.clear();
+        for (int i = 0; i < HEIGHT; ++i) {
+            map.push_back(mapData[i]);
+            for (int j = 0; mapData[i][j] != 0; j++) {
+                if (mapData[i][j] == '.')
                     totalFood++;
             }
         }
@@ -85,9 +125,11 @@ public:
             }
         }
     }
-	bool foodremains() const{
-		return totalFood > 0;
-	}
+
+    bool foodremains() const {
+        return totalFood > 0;
+    }
+
     char getTile(int row, int col) const {
         if (row >= 0 && row < HEIGHT && col >= 0 && col < WIDTH)
             return map[row][col];
@@ -98,6 +140,13 @@ public:
         int col = static_cast<int>((pos.x - offset.x) / CELL_SIZE);
         int row = static_cast<int>((pos.y - offset.y) / CELL_SIZE);
         return getTile(row, col) == '#';
+    }
+
+    bool isWalkable(Vector2f pos) const {
+        int col = static_cast<int>((pos.x - offset.x) / CELL_SIZE);
+        int row = static_cast<int>((pos.y - offset.y) / CELL_SIZE);
+        char tile = getTile(row, col);
+        return tile != '#' && tile != ' ';
     }
 
     bool isFood(Vector2f pos) {
@@ -130,7 +179,38 @@ public:
         return offset;
     }
 
+    Vector2i getCell(Vector2f pos) const {
+        int col = static_cast<int>((pos.x - offset.x) / CELL_SIZE);
+        int row = static_cast<int>((pos.y - offset.y) / CELL_SIZE);
+        return { col, row };
+    }
+
     static int getCellSize() { return CELL_SIZE; }
     static int getWidth() { return WIDTH; }
     static int getHeight() { return HEIGHT; }
+    Vector2i getP() const {
+        for (int row = 0; row < HEIGHT; ++row) {
+            for (int col = 0; col < WIDTH; ++col) {
+                if (map[row][col] == 'P')
+                    return { col, row };
+            }
+        }
+        return { -1, -1 }; // Not found
+    }
+
+    Vector2i getGhost(char ghostId) const {
+        for (int row = 0; row < HEIGHT; ++row) {
+            for (int col = 0; col < WIDTH; ++col) {
+                if (map[row][col] == ghostId)
+                    return { col, row };
+            }
+        }
+        return { -1, -1 }; // Not found
+    }
+
+    Vector2i getGhost0() const { return getGhost('0'); }
+    Vector2i getGhost1() const { return getGhost('1'); }
+    Vector2i getGhost2() const { return getGhost('2'); }
+    Vector2i getGhost3() const { return getGhost('3'); }
+
 };

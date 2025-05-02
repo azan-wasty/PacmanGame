@@ -1,8 +1,13 @@
 #pragma once
+#include <SFML/Graphics.hpp>
+#include <iostream>
 #include "help.h"
 #include "Pacman.h"
-#include "Ghost.h"
+#include "Ghosts.h"
 #include "Maze.h"
+
+using namespace std;
+using namespace sf;
 
 class Game {
 private:
@@ -50,79 +55,96 @@ public:
 
     void CheckCollisions() {
         for (int i = 0; i < ghostCount; i++) {
-            if (ghosts[i]->GhostCollison(*pacman)) {
+            if (ghosts[i]->GhostCollision(pacman->GetPosition())) {
                 if (!superMode) {
-                    gameOver = true;  // Game over if Pacman collides with ghost in normal mode
+                    lives--;  // Deduct life if not in super mode
+                    if (lives <= 0)
+                        gameOver = true;  // Game over if lives run out
+                    else
+                        ResetPositions();  // Respawn positions if lives remain
                 }
                 else {
-                    ghosts[i]->update();  // Update ghost position after collision (in super mode)
+                    ghosts[i]->Update();  // Update ghost position after collision (in super mode)
                 }
             }
         }
 
         // If Pacman hits a wall
-        if (maze->isWall(pacman->GetNextPosition())) {
+        if (maze->isWall(pacman->GetPosition())) {
             pacman->Stop();  // Stop Pacman if it's about to collide with a wall
         }
 
         // If Pacman eats food
-        if (maze->isFood(pacman->GetNextPosition())) {
+        if (maze->isFood(pacman->GetPosition())) {
             score += 10;  // Increase score
-          
         }
 
-        // If Pacman eats superfood
-        if (maze->isSuperFood(pacman->GetNextPosition())) {
-            superMode = true;  // This is to go even further beyond
-            pacman->superSaiyan();  // Activate super mode for Pacman
-            powerTimer.restart();  // Restart the power-up timer
-			score += 50;  // Increase score for eating superfood
-        }
+    //    // If Pacman eats superfood
+    //    if (maze->isSuperFood(pacman->GetNextPosition())) {
+    //        superMode = true;  // This is to go even further beyond
+    //        pacman->superSaiyan();  // Activate super mode for Pacman
+    //        powerTimer.restart();  // Restart the power-up timer
+    //        score += 50;  // Increase score for eating superfood
+    //    }
 
-        // Handle super mode timer
-        if (powerTimer.getElapsedTime().asSeconds() > 5) {
-            superMode = false;  // Turn off super mode after 5 seconds
-            pacman->normal();  // Switch Pacman back to normal mode
-        }
+    //    // Handle super mode timer
+    //    if (superMode && powerTimer.getElapsedTime().asSeconds() > 5) {
+    //        superMode = false;  // Turn off super mode after 5 seconds
+    //        pacman->normal();  // Switch Pacman back to normal mode
+    //    }
 
-        // In super mode, ghosts get scared
-        if (superMode) {
-            for (int i = 0; i < ghostCount; i++) {
-                ghosts[i]->scared();  // Make the ghosts scared
-            }
+    //    // In super mode, ghosts get scared
+    //    if (superMode) {
+    //        for (int i = 0; i < ghostCount; i++) {
+    //            ghosts[i]->scared();  // Make the ghosts scared
+    //        }
+    //    }
+    //}
+}
+    // Updated HandleInput method to return Direction
+   // Convert Direction enum to corresponding sf::Keyboard::Key
+    Keyboard::Key ConvertDirectionToKey(Direction dir) {
+        switch (dir) {
+        case RIGHT: return Keyboard::Right;
+        case UP: return Keyboard::Up;
+        case DOWN: return Keyboard::Down;
+        case LEFT: return Keyboard::Left;
+        default: return Keyboard::Unknown;  // Handle invalid direction
         }
     }
 
-    int HandleInput() {
-        int dir;
-        if (isCursorKeyPressed(dir)) {
+    // Updated HandleInput method to return Direction
+    Direction HandleInput() {
+        Direction dir = RIGHT;  // Default to RIGHT direction (can be changed to default direction you prefer)
+
+        // Check for cursor key presses using sf::Keyboard::isKeyPressed
+        if (Keyboard::isKeyPressed(ConvertDirectionToKey(dir))) {
             pacman->Move(dir);  // Move Pacman based on the direction input
         }
-        return 0;
+
+        return dir;  // Return the Direction enum value
     }
+
 
     void Update() {
         // Update game entities
         pacman->Update();  // Update Pacman's position
         for (int i = 0; i < ghostCount; i++) {
-            ghosts[i]->update();  // Update ghosts' positions
+            ghosts[i]->Update();  // Update ghosts' positions
         }
     }
 
     void Run() {
         // Manages the actual running of the game and does so until Pacman and ghosts do not collide in non-super saiyan mode.
-        for (int i = 0; !gameOver; i++) {
+        while (window.isOpen() && !gameOver) {
 
-            maze->draw(window);  // Draw the maze
+            window.clear();  // Clear screen
 
-            pacman->Update();  // Display the movement of Pacman on the map
-
-            score = pacman->GetScore();  // Update the score
-            for (int i = 0; i < ghostCount; i++) {
-                ghosts[i]->Update();  // Update ghosts
-            }
-
-            CheckCollisions();  // Check for collisions
+            HandleInput();         // Handle user input
+            Update();              // Update all game entities
+            CheckCollisions();     // Check for collisions
+            maze->draw(window);    // Draw the maze
+            window.display();      // Display everything
 
             // If all food is eaten, end the game and reset
             if (!maze->foodremains()) {
@@ -142,9 +164,9 @@ public:
 
     void ResetPositions() {
         // OOP at its peak (you'll know when you see the updates of ghosts)
-        pacman->resetPosition();  // Reset Pacman's position
+        pacman->Reset();  // Reset Pacman's position
         for (int i = 0; i < ghostCount; i++) {
-            ghosts[i]->ResetPosition();  // Reset each ghost's position
+            ghosts[i]->Reset();  // Reset each ghost's position
         }
     }
 
@@ -156,6 +178,13 @@ public:
     void ShowWinScreen() {
         // Display the win screen (you can design this as per your need)
         // For now, just a placeholder message
-         cout << "Game Over! You completed the level!" <<  endl;
+        cout << "Game Over! You completed the level!" << endl;
+    }
+
+    ~Game() {
+        delete[] ghosts;  // Free ghost pointer array
     }
 };
+
+
+
