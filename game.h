@@ -1,6 +1,5 @@
 #pragma once
 #include "help.h"
-
 #include "Pacman.h"
 #include "Ghost.h"
 #include "Maze.h"
@@ -15,7 +14,7 @@ private:
     Ghost** ghosts;
     int ghostCount;
 
-    // Maze (2D char array inside)
+    // Maze
     Maze* maze;
 
     // Game state
@@ -28,100 +27,135 @@ private:
 
 public:
     // Constructor 
-
-    Game(RenderWindow& win, Pacman p, Maze m, Ghosts** g) : window(win) {
+    Game(RenderWindow& win, Pacman* p, Maze* m, Ghost** g, int ghostCount) : window(win) {
         level = 1;
         score = 0;
         lives = 3;
         gameOver = false;
+        superMode = false;  // Starts with no power mode
+        this->ghostCount = ghostCount;  // Set ghost count dynamically
 
-        superMode = false; // Starts with no power mode
-        ghostCount = 4; // Game starts with 4 ghosts
-
-        pacman = &p;
-        maze = &m;
-        ghosts = new Ghost*[ghostCount];  // Array of pointers to Ghosts
+        pacman = p;
+        maze = m;
+        ghosts = new Ghost * [ghostCount];  // Array of pointers to Ghosts
         for (int i = 0; i < ghostCount; i++) {
             ghosts[i] = g[i];
         }
     }
-	// core functionality of the game
-    void display();
+
+    // core functionality of the game
+    void display() {
+        // This method would include rendering logic for the game if needed.
+    }
+
     void CheckCollisions() {
-		for (int i = 0; i < ghostCount; i++) {
-			if (ghosts[i]->GhostCollison(*pacman)) {
-				if (!superMode) {
-					gameOver = true;
-				}
-                else {
-                    ghosts[i]->update();
+        for (int i = 0; i < ghostCount; i++) {
+            if (ghosts[i]->GhostCollison(*pacman)) {
+                if (!superMode) {
+                    gameOver = true;  // Game over if Pacman collides with ghost in normal mode
                 }
-			}
-		}
-        if (!maze->IsWall(pacman->GetNextPosition())) {
-            pacman->MoveInCurrentDirection();
+                else {
+                    ghosts[i]->update();  // Update ghost position after collision (in super mode)
+                }
+            }
         }
 
+        // If Pacman hits a wall
+        if (maze->isWall(pacman->GetNextPosition())) {
+            pacman->Stop();  // Stop Pacman if it's about to collide with a wall
+        }
 
+        // If Pacman eats food
+        if (maze->isFood(pacman->GetNextPosition())) {
+            score += 10;  // Increase score
+          
+        }
+
+        // If Pacman eats superfood
+        if (maze->isSuperFood(pacman->GetNextPosition())) {
+            superMode = true;  // This is to go even further beyond
+            pacman->superSaiyan();  // Activate super mode for Pacman
+            powerTimer.restart();  // Restart the power-up timer
+			score += 50;  // Increase score for eating superfood
+        }
+
+        // Handle super mode timer
+        if (powerTimer.getElapsedTime().asSeconds() > 5) {
+            superMode = false;  // Turn off super mode after 5 seconds
+            pacman->normal();  // Switch Pacman back to normal mode
+        }
+
+        // In super mode, ghosts get scared
+        if (superMode) {
+            for (int i = 0; i < ghostCount; i++) {
+                ghosts[i]->scared();  // Make the ghosts scared
+            }
+        }
     }
+
     int HandleInput() {
         int dir;
         if (isCursorKeyPressed(dir)) {
-            return dir;
+            pacman->Move(dir);  // Move Pacman based on the direction input
         }
         return 0;
     }
-	void Update() {
-		// Update the game state
-		pacman->Update();
-		for (int i = 0; i < ghostCount; i++) {
-			ghosts[i]->Death();
-		}
-        if (maze->foodconsumed()) {
 
-        }
-	}
-
-
-    void Run() {// Manages the actual running of the code and does so until the pacman and ghost do not collide 
-        // in non super saiyan mode.
-
-        for (int i = 0; !gameOver; i++) {
-            display();
-            maze->display(level);// displays the map
-
-            pacman->Update();// displays the movement of pacman on the map
-            if (superMode) {
-                ghosts[i]->fear();
-            }
-
-            score = pacman->GetScore(); // manages the score
-            ghosts[i]->Update();
-			CheckCollisions(); //Game run stops if GhostCollison returns true i.e Pacman collided with the ghos in non super saiyan mode.
-            
-            if (score == level_max) { // if all food on the map consumed , level up
-
-                ResetGame();
-                GameCompleted();
-
-            }
-        }
-    }
-    void ResetGame() {//gets the game ready for another round in the same run
-        score = 0;
-        ResetPositions(); 
-    }
-    void ResetPositions() { //OOP at its peak (you'll know when you see the updates of ghosts)
-        pacman -> resetPosition();
+    void Update() {
+        // Update game entities
+        pacman->Update();  // Update Pacman's position
         for (int i = 0; i < ghostCount; i++) {
-            ghosts[i]->ResetPosition();
+            ghosts[i]->update();  // Update ghosts' positions
         }
-        
     }
-    
-    // Helpers
 
-    
-	void GameCompleted();
-    void ShowWinScreen();
-}; 
+    void Run() {
+        // Manages the actual running of the game and does so until Pacman and ghosts do not collide in non-super saiyan mode.
+        for (int i = 0; !gameOver; i++) {
+
+            maze->draw(window);  // Draw the maze
+
+            pacman->Update();  // Display the movement of Pacman on the map
+
+            score = pacman->GetScore();  // Update the score
+            for (int i = 0; i < ghostCount; i++) {
+                ghosts[i]->Update();  // Update ghosts
+            }
+
+            CheckCollisions();  // Check for collisions
+
+            // If all food is eaten, end the game and reset
+            if (!maze->foodremains()) {
+                ResetGame();
+                GameCompleted();  // Notify that the game is completed for the round
+            }
+        }
+    }
+
+    void ResetGame() {
+        // Gets the game ready for another round in the same run
+        score = 0;
+        level++;  // Optionally increment the level for the next round
+        maze->reset();  // Reset the maze
+        ResetPositions();  // Reset the positions of Pacman and ghosts
+    }
+
+    void ResetPositions() {
+        // OOP at its peak (you'll know when you see the updates of ghosts)
+        pacman->resetPosition();  // Reset Pacman's position
+        for (int i = 0; i < ghostCount; i++) {
+            ghosts[i]->ResetPosition();  // Reset each ghost's position
+        }
+    }
+
+    void GameCompleted() {
+        // Handle game completion (e.g., show score, restart game)
+        ShowWinScreen();
+    }
+
+    void ShowWinScreen() {
+        // Display the win screen (you can design this as per your need)
+        // For now, just a placeholder message
+         cout << "Game Over! You completed the level!" <<  endl;
+    }
+};

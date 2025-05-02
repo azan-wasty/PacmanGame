@@ -51,7 +51,6 @@ public:
     }
 
     // Abstract behavior for derived classes
-    virtual void HandleInput() = 0;   // Must override
     virtual void Update() = 0;        // Must override
     virtual void Reset() = 0;         // Must override
 };
