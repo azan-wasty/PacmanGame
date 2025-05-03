@@ -47,7 +47,7 @@ private:
 
 public:
     Maze() {
-        offset = Vector2f(60.f, 20.f);  // Fixed offset
+        offset = Vector2f(60.f, 40.f);  // Fixed offset
         srand(static_cast<unsigned>(time(nullptr)));
         wallColor = Color(rand() % 256, rand() % 256, rand() % 256);
         reset();

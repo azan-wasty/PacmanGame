@@ -1,5 +1,6 @@
 #include <SFML/Graphics.hpp>
 #include "maze.h"
+#include "pacman.h"
 #include <windows.h>
 #include <vector>
 #include <cstdlib>
@@ -9,10 +10,8 @@ using namespace std;
 using namespace sf;
 
 void MainGame() {
-    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-    int windowHeight = 1050;
     int windowWidth = 960;
+    int windowHeight = 1050;
 
     RenderWindow window(VideoMode(windowWidth, windowHeight), "Pac-Man");
     window.setFramerateLimit(60);
@@ -49,7 +48,26 @@ void MainGame() {
     bool gameStarted = false;
     Maze maze;
 
+    // Setup Pacman
+    Vector2i pacmanCell = maze.getP();
+    Vector2f offset = maze.getOffset();
+    float cellSize = Maze::getCellSize();
+    Vector2f pacmanStartPos(pacmanCell.x * cellSize + offset.x, pacmanCell.y * cellSize + offset.y);
+
+    map<Direction, string> spritePaths = {
+        { UP, "sprites/PACMANUP.PNG" },
+        { DOWN, "sprites/PACMANDOWN.PNG" },
+        { LEFT, "sprites/PACMANLEFT.PNG" },
+        { RIGHT, "sprites/PACMANRIGHT.PNG" }
+    };
+
+    Pacman pacman(spritePaths, 4, 50, 50, pacmanStartPos.x, pacmanStartPos.y, 2.0f);
+
+    Clock clock;
+
     while (window.isOpen()) {
+        float dt = clock.restart().asSeconds();
+
         Event event;
         while (window.pollEvent(event)) {
             if (event.type == Event::Closed)
@@ -71,7 +89,30 @@ void MainGame() {
                         }
                     }
                 }
+                else if (gameStarted) {
+                    if (event.key.code == Keyboard::Up)    pacman.SetDirection(UP);
+                    if (event.key.code == Keyboard::Down)  pacman.SetDirection(DOWN);
+                    if (event.key.code == Keyboard::Left)  pacman.SetDirection(LEFT);
+                    if (event.key.code == Keyboard::Right) pacman.SetDirection(RIGHT);
+                }
             }
+        }
+
+        if (gameStarted) {
+            Vector2f nextPos = pacman.GetPosition();
+            float speed = 2.0f;
+
+            switch (pacman.GetDirection()) {
+            case UP:    nextPos.y -= speed; break;
+            case DOWN:  nextPos.y += speed; break;
+            case LEFT:  nextPos.x -= speed; break;
+            case RIGHT: nextPos.x += speed; break;
+            }
+
+            if (maze.isWalkable(nextPos))
+                pacman.Move(pacman.GetDirection());
+
+            pacman.Update();
         }
 
         window.clear(Color::Black);
@@ -93,11 +134,13 @@ void MainGame() {
         }
         else if (gameStarted) {
             maze.draw(window);
+            window.draw(pacman.getSprite());
         }
 
         window.display();
     }
 }
+
 
 int main() {
     MainGame();

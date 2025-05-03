@@ -51,12 +51,21 @@ public:
         case LEFT:  position.x -= speed; break;
         }
         sprite.setPosition(position);
-    }
+    }   
 
 
     // Getter for Pacman's position
     Vector2f GetPosition() const {
         return position;
+    }
+    // Returns the animated Pacman sprite for drawing
+    const Sprite& getSprite() const {
+        return sprite;
+    }
+
+    // Returns the current movement direction of Pacman
+    Direction GetDirection() const {
+        return currentDirection;
     }
 
     // Stop Pacman's movement
