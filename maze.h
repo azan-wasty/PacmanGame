@@ -8,7 +8,7 @@ using namespace sf;
 
 class Maze {
 private:
-    static const int WIDTH = 23;
+    static const int WIDTH = 21;
     static const int HEIGHT = 21;
     static const int CELL_SIZE = 50;
 
@@ -55,11 +55,9 @@ public:
         }
     }
 
-    // Reset the maze to its initial state
     void reset() {
-        totalFood = 0; // Reset food count
+        totalFood = 0;
 
-        // Reset map
         const char* mapData[HEIGHT] = {
             " ################### ",
             " #........#........# ",
@@ -84,7 +82,6 @@ public:
             " ################### "
         };
 
-        // Rebuild the map and count food
         map.clear();
         for (int i = 0; i < HEIGHT; ++i) {
             map.push_back(mapData[i]);
@@ -97,7 +94,7 @@ public:
 
     void draw(RenderWindow& window) {
         for (int row = 0; row < HEIGHT; ++row) {
-            for (int col = 0; col < WIDTH; ++col) {
+            for (int col = 0; col < map[row].length(); ++col) {
                 char tile = map[row][col];
                 float x = offset.x + col * CELL_SIZE;
                 float y = offset.y + row * CELL_SIZE;
@@ -188,29 +185,29 @@ public:
     static int getCellSize() { return CELL_SIZE; }
     static int getWidth() { return WIDTH; }
     static int getHeight() { return HEIGHT; }
+
     Vector2i getP() const {
         for (int row = 0; row < HEIGHT; ++row) {
-            for (int col = 0; col < WIDTH; ++col) {
+            for (int col = 0; col < map[row].length(); ++col) {
                 if (map[row][col] == 'P')
                     return { col, row };
             }
         }
-        return { -1, -1 }; // Not found
+        return { -1, -1 };
     }
 
     Vector2i getGhost(char ghostId) const {
         for (int row = 0; row < HEIGHT; ++row) {
-            for (int col = 0; col < WIDTH; ++col) {
+            for (int col = 0; col < map[row].length(); ++col) {
                 if (map[row][col] == ghostId)
                     return { col, row };
             }
         }
-        return { -1, -1 }; // Not found
+        return { -1, -1 };
     }
 
     Vector2i getGhost0() const { return getGhost('0'); }
     Vector2i getGhost1() const { return getGhost('1'); }
     Vector2i getGhost2() const { return getGhost('2'); }
     Vector2i getGhost3() const { return getGhost('3'); }
-
 };

@@ -1,13 +1,17 @@
-
 #include <SFML/Graphics.hpp>
 #include <windows.h>
 #include <vector>
 #include <cstdlib>
 #include <ctime>
 #include <conio.h>
+#include "maze.h"
+
 using namespace std;
 using namespace sf;
-void MainGame() {
+
+enum GameState { MENU, GAME, EXIT };
+
+int main() {
     // Get screen size
     int screenWidth = GetSystemMetrics(SM_CXSCREEN);
     int screenHeight = GetSystemMetrics(SM_CYSCREEN);
@@ -22,24 +26,26 @@ void MainGame() {
 
     // Load font
     Font font;
-    font.loadFromFile("ArcadeClassic.ttf");
+    if (!font.loadFromFile("ArcadeClassic.ttf")) {
+        return -1;
+    }
 
     // Title text
- // Title (moved from y = 60 to y = 200)
     Text title("PAC-MAN", font, 80);
     title.setFillColor(Color::Yellow);
     title.setPosition(windowWidth / 2.f - title.getGlobalBounds().width / 2.f, 200);
 
-    // Menu options (moved from starting y = 200 to y = 320)
-    vector< string> menuItems = { "Start Game", "Options", "Exit" };
+    // Menu options
+    vector<string> menuItems = { "Start Game", "Options", "Exit" };
     vector<Text> menuTexts;
+    int selectedItem = 0;
+
     for (size_t i = 0; i < menuItems.size(); ++i) {
         Text item(menuItems[i], font, 40);
-        item.setFillColor(Color::White);
-        item.setPosition(windowWidth / 2.f - item.getGlobalBounds().width / 2.f, 320 + i * 90); // also increased spacing
+        item.setFillColor(i == selectedItem ? Color::Red : Color::White);
+        item.setPosition(windowWidth / 2.f - item.getGlobalBounds().width / 2.f, 320 + i * 90);
         menuTexts.push_back(item);
     }
-
 
     // Flowing dots setup
     struct Dot {
@@ -59,15 +65,41 @@ void MainGame() {
         dots.push_back({ dot, speed });
     }
 
+    GameState state = MENU;
+    Maze maze;
 
     while (window.isOpen()) {
         Event event;
         while (window.pollEvent(event)) {
             if (event.type == Event::Closed)
                 window.close();
+
+            if (state == MENU) {
+                if (event.type == Event::KeyPressed) {
+                    if (event.key.code == Keyboard::Up) {
+                        selectedItem = (selectedItem - 1 + menuItems.size()) % menuItems.size();
+                    }
+                    else if (event.key.code == Keyboard::Down) {
+                        selectedItem = (selectedItem + 1) % menuItems.size();
+                    }
+                    else if (event.key.code == Keyboard::Enter) {
+                        if (menuItems[selectedItem] == "Start Game") {
+                            state = GAME;
+                        }
+                        else if (menuItems[selectedItem] == "Exit") {
+                            window.close();
+                        }
+                        // You can add "Options" functionality later
+                    }
+
+                    // Update menu colors
+                    for (size_t i = 0; i < menuTexts.size(); ++i)
+                        menuTexts[i].setFillColor(i == selectedItem ? Color::Red : Color::White);
+                }
+            }
         }
 
-        // Update dot positions
+        // Update flowing dots
         for (auto& d : dots) {
             Vector2f pos = d.shape.getPosition();
             pos.y += d.speed;
@@ -76,25 +108,22 @@ void MainGame() {
             d.shape.setPosition(pos.x, pos.y);
         }
 
-        // Draw everything
         window.clear(Color::Black);
 
-        for (const auto& d : dots)
-            window.draw(d.shape);
+        if (state == MENU) {
+            for (const auto& d : dots)
+                window.draw(d.shape);
 
-        window.draw(title);
-        for (const auto& item : menuTexts)
-            window.draw(item);
-		
-
+            window.draw(title);
+            for (const auto& item : menuTexts)
+                window.draw(item);
+        }
+        else if (state == GAME) {
+            maze.draw(window);
+        }
 
         window.display();
-        getch();
-		maze->draw(window);
     }
-}
-int main() {
 
-	MainGame();
     return 0;
 }
