@@ -1,71 +1,52 @@
 #include <SFML/Graphics.hpp>
+#include "maze.h"
 #include <windows.h>
 #include <vector>
 #include <cstdlib>
 #include <ctime>
-#include <conio.h>
-#include "maze.h"
 
 using namespace std;
 using namespace sf;
 
-enum GameState { MENU, GAME, EXIT };
-
-int main() {
-    // Get screen size
+void MainGame() {
     int screenWidth = GetSystemMetrics(SM_CXSCREEN);
     int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+    int windowHeight = 1050;
+    int windowWidth = 960;
 
-    // Desired window size
-    int windowHeight = screenHeight - 50;
-    int windowWidth = screenWidth / 2;
-
-    // Create window
     RenderWindow window(VideoMode(windowWidth, windowHeight), "Pac-Man");
     window.setFramerateLimit(60);
 
-    // Load font
     Font font;
-    if (!font.loadFromFile("ArcadeClassic.ttf")) {
-        return -1;
-    }
+    font.loadFromFile("ArcadeClassic.ttf");
 
-    // Title text
     Text title("PAC-MAN", font, 80);
     title.setFillColor(Color::Yellow);
     title.setPosition(windowWidth / 2.f - title.getGlobalBounds().width / 2.f, 200);
 
-    // Menu options
     vector<string> menuItems = { "Start Game", "Options", "Exit" };
     vector<Text> menuTexts;
     int selectedItem = 0;
 
     for (size_t i = 0; i < menuItems.size(); ++i) {
         Text item(menuItems[i], font, 40);
-        item.setFillColor(i == selectedItem ? Color::Red : Color::White);
+        item.setFillColor(Color::White);
         item.setPosition(windowWidth / 2.f - item.getGlobalBounds().width / 2.f, 320 + i * 90);
         menuTexts.push_back(item);
     }
 
-    // Flowing dots setup
-    struct Dot {
-        CircleShape shape;
-        float speed;
-    };
+    struct Dot { CircleShape shape; float speed; };
     vector<Dot> dots;
-    const int dotCount = 100;
-    srand(static_cast<unsigned>(time(nullptr)));
-    for (int i = 0; i < dotCount; ++i) {
+    for (int i = 0; i < 100; ++i) {
         CircleShape dot(2);
         dot.setFillColor(Color::White);
-        float x = static_cast<float>(rand() % windowWidth);
-        float y = static_cast<float>(rand() % windowHeight);
-        dot.setPosition(x, y);
+        dot.setPosition(rand() % windowWidth, rand() % windowHeight);
         float speed = 1.f + static_cast<float>(rand() % 100) / 100.f;
         dots.push_back({ dot, speed });
     }
 
-    GameState state = MENU;
+    bool inMenu = true;
+    bool gameStarted = false;
     Maze maze;
 
     while (window.isOpen()) {
@@ -74,56 +55,51 @@ int main() {
             if (event.type == Event::Closed)
                 window.close();
 
-            if (state == MENU) {
-                if (event.type == Event::KeyPressed) {
-                    if (event.key.code == Keyboard::Up) {
+            if (event.type == Event::KeyPressed) {
+                if (inMenu) {
+                    if (event.key.code == Keyboard::Up)
                         selectedItem = (selectedItem - 1 + menuItems.size()) % menuItems.size();
-                    }
-                    else if (event.key.code == Keyboard::Down) {
+                    else if (event.key.code == Keyboard::Down)
                         selectedItem = (selectedItem + 1) % menuItems.size();
-                    }
-                    else if (event.key.code == Keyboard::Enter) {
-                        if (menuItems[selectedItem] == "Start Game") {
-                            state = GAME;
+                    else if (event.key.code == Keyboard::Enter || event.key.code == Keyboard::Return) {
+                        if (selectedItem == 0) {
+                            inMenu = false;
+                            gameStarted = true;
                         }
-                        else if (menuItems[selectedItem] == "Exit") {
+                        else if (selectedItem == 2) {
                             window.close();
                         }
-                        // You can add "Options" functionality later
                     }
-
-                    // Update menu colors
-                    for (size_t i = 0; i < menuTexts.size(); ++i)
-                        menuTexts[i].setFillColor(i == selectedItem ? Color::Red : Color::White);
                 }
             }
         }
 
-        // Update flowing dots
+        window.clear(Color::Black);
+
         for (auto& d : dots) {
             Vector2f pos = d.shape.getPosition();
             pos.y += d.speed;
-            if (pos.y > windowHeight)
-                pos.y = 0;
-            d.shape.setPosition(pos.x, pos.y);
+            if (pos.y > windowHeight) pos.y = 0;
+            d.shape.setPosition(pos);
+            window.draw(d.shape);
         }
 
-        window.clear(Color::Black);
-
-        if (state == MENU) {
-            for (const auto& d : dots)
-                window.draw(d.shape);
-
+        if (inMenu) {
             window.draw(title);
-            for (const auto& item : menuTexts)
-                window.draw(item);
+            for (size_t i = 0; i < menuTexts.size(); ++i) {
+                menuTexts[i].setFillColor(i == selectedItem ? Color::Yellow : Color::White);
+                window.draw(menuTexts[i]);
+            }
         }
-        else if (state == GAME) {
+        else if (gameStarted) {
             maze.draw(window);
         }
 
         window.display();
     }
+}
 
+int main() {
+    MainGame();
     return 0;
 }
