@@ -118,11 +118,17 @@ public:
         return getTile(cell.y, cell.x) == '#';
     }
 
-    bool isWalkable(Vector2f pos) const {
-        Vector2i cell = getCell(pos);
-        char tile = getTile(cell.y, cell.x);
-        return tile != '#' && tile != ' ';
+    bool isWalkable(Vector2f position) {
+        int col = static_cast<int>((position.x - offset.x) / CELL_SIZE);
+        int row = static_cast<int>((position.y - offset.y) / CELL_SIZE);
+
+        if (row < 0 || row >= HEIGHT || col < 0 || col >= WIDTH)
+            return false;
+
+        return map[row][col] != '#';
     }
+
+
 
     bool isFood(Vector2f pos) {
         Vector2i cell = getCell(pos);

@@ -60,7 +60,7 @@ public:
         sprite.setPosition(position);
     }
 
-    void Update() override {
+    void Update() {
         sprite.setTexture(textures[currentDirection]);
         animation.update(0.075f, currentDirection, sprite);
         sprite.setPosition(position);

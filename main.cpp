@@ -56,9 +56,9 @@ void MainGame() {
 
     map<Direction, string> spritePaths = {
         { UP, "sprites/PACMANUP.PNG" },
-        { DOWN, "sprites/PACMANDOWN.PNG" },
-        { LEFT, "sprites/PACMANLEFT.PNG" },
-        { RIGHT, "sprites/PACMANRIGHT.PNG" }
+        { DOWN, "sprites/PACMANDOWN.png" },
+        { LEFT, "sprites/PACMANLEFT.png" },
+        { RIGHT, "sprites/PACMANRIGHT.png" }
     };
 
     Pacman pacman(spritePaths, 4, 50, 50, pacmanStartPos.x, pacmanStartPos.y, 2.0f);
@@ -110,7 +110,12 @@ void MainGame() {
             }
 
             if (maze.isWalkable(nextPos))
-                pacman.Move(pacman.GetDirection());
+                pacman.Move(pacman.GetDirection(), maze);
+            else if  (maze.isWall(pacman.GetPosition())) {
+                pacman.Stop(pacman.GetDirection());  // Stop Pacman if it's about to collide with a wall
+            } {
+                
+            }
 
             pacman.Update();
         }
