@@ -9,7 +9,7 @@ private:
     Animation animation;
     Direction currentDirection;
     Vector2f initialPosition;
-    float scaleFactor = 0.75f;  
+    float scaleFactor = 0.77f;  
 
 public:
     Pacman(const map<Direction, string>& spriteSheetPaths,

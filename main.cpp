@@ -9,6 +9,17 @@
 using namespace std;
 using namespace sf;
 
+#include <SFML/Graphics.hpp>
+#include "maze.h"
+#include "pacman.h"
+#include <windows.h>
+#include <vector>
+#include <cstdlib>
+#include <ctime>
+
+using namespace std;
+using namespace sf;
+
 void MainGame() {
     int windowWidth = 960;
     int windowHeight = 1050;
@@ -111,11 +122,12 @@ void MainGame() {
 
             if (maze.isWalkable(nextPos))
                 pacman.Move(pacman.GetDirection(), maze);
-            else if  (maze.isWall(pacman.GetPosition())) {
+            else if (maze.isWall(pacman.GetPosition())) {
                 pacman.Stop(pacman.GetDirection());  // Stop Pacman if it's about to collide with a wall
-            } {
-                
             }
+
+            maze.isFood(pacman.GetPosition()); // Check if Pacman eats food
+			maze.isSuperFood(pacman.GetPosition()); // Check if Pacman eats superfood
 
             pacman.Update();
         }
@@ -145,7 +157,6 @@ void MainGame() {
         window.display();
     }
 }
-
 
 int main() {
     MainGame();

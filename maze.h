@@ -5,6 +5,7 @@
 #include <string>
 #include <cstdlib>
 #include <ctime>
+#include <cmath>
 
 using namespace std;
 using namespace sf;
@@ -19,6 +20,8 @@ private:
     vector<string> map;
     Color wallColor;
     bool superMode = false;
+    Clock superModeClock;
+    const float superDuration = 10.f;
     int totalFood = 0;
 
     const char* mapData[HEIGHT] = {
@@ -47,7 +50,7 @@ private:
 
 public:
     Maze() {
-        offset = Vector2f(60.f, 40.f);  // Fixed offset
+        offset = Vector2f(60.f, 40.f);
         srand(static_cast<unsigned>(time(nullptr)));
         wallColor = Color(rand() % 256, rand() % 256, rand() % 256);
         reset();
@@ -66,7 +69,7 @@ public:
                 row += string(WIDTH - row.length(), ' ');
             map.push_back(row);
             for (char c : row) {
-                if (c == '.')
+                if (c == '.' || c == 'o')
                     totalFood++;
             }
         }
@@ -128,11 +131,16 @@ public:
         return map[row][col] != '#';
     }
 
-
-
     bool isFood(Vector2f pos) {
         Vector2i cell = getCell(pos);
-        if (getTile(cell.y, cell.x) == '.') {
+        Vector2f cellCenter = {
+            offset.x + cell.x * CELL_SIZE + CELL_SIZE / 2.f,
+            offset.y + cell.y * CELL_SIZE + CELL_SIZE / 2.f
+        };
+
+        float distance = sqrt(pow(pos.x - cellCenter.x, 2) + pow(pos.y - cellCenter.y, 2));
+
+        if (getTile(cell.y, cell.x) == '.' && distance < CELL_SIZE * 0.65f) {
             map[cell.y][cell.x] = ' ';
             totalFood--;
             return true;
@@ -142,9 +150,17 @@ public:
 
     bool isSuperFood(Vector2f pos) {
         Vector2i cell = getCell(pos);
-        if (getTile(cell.y, cell.x) == 'o') {
+        Vector2f cellCenter = {
+            offset.x + cell.x * CELL_SIZE + CELL_SIZE / 2.f,
+            offset.y + cell.y * CELL_SIZE + CELL_SIZE / 2.f
+        };
+
+        float distance = sqrt(pow(pos.x - cellCenter.x, 2) + pow(pos.y - cellCenter.y, 2));
+
+        if (getTile(cell.y, cell.x) == 'o' && distance < CELL_SIZE * 0.65f) {
             map[cell.y][cell.x] = ' ';
             totalFood--;
+			superMode = true;   
             return true;
         }
         return false;
