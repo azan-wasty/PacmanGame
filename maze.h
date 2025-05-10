@@ -1,5 +1,5 @@
 #pragma once
-
+#include <iostream>
 #include <SFML/Graphics.hpp>
 #include <vector>
 #include <string>
@@ -193,12 +193,15 @@ public:
     Vector2i getGhost(char ghostId) const {
         for (int row = 0; row < HEIGHT; ++row) {
             for (int col = 0; col < WIDTH; ++col) {
-                if (map[row][col] == ghostId)
+                if (map[row][col] == ghostId) {
+                    cout << "Ghost " << ghostId << " found at (" << col << ", " << row << ")" << endl;
                     return { col, row };
+                }
             }
         }
-        return { -1, -1 };
+        return { -1, -1 };  // Return invalid position if not found
     }
+
 
     Vector2i getGhost0() const { return getGhost('0'); }
     Vector2i getGhost1() const { return getGhost('1'); }

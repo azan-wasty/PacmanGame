@@ -33,7 +33,7 @@ public:
         sprite.setPosition(position);
     }
     
-    void Move(float offsetX, float offsetY) {
+   virtual void Move(float offsetX, float offsetY) {
         position += Vector2f(offsetX, offsetY);
         sprite.setPosition(position);
     }
@@ -51,6 +51,6 @@ public:
     }
 
     // Abstract behavior for derived classes
-    virtual void Update() = 0;        // Must override
-    virtual void Reset() = 0;         // Must override
+   // virtual void Update();        // Must override
+    //virtual void Reset() ;         // Must override
 };

@@ -1,34 +1,144 @@
 #include <SFML/Graphics.hpp>
 #include "maze.h"
 #include "pacman.h"
+#include "Ghosts.h"
 #include <windows.h>
 #include <vector>
 #include <cstdlib>
 #include <ctime>
+#include <map>
+#include <string>
+#include <algorithm>
+#include <random>
+#include <iostream>
 
 using namespace std;
 using namespace sf;
 
-#include <SFML/Graphics.hpp>
-#include "maze.h"
-#include "pacman.h"
-#include <windows.h>
-#include <vector>
-#include <cstdlib>
-#include <ctime>
+const int windowWidth = 960;
+const int windowHeight = 1050;
 
-using namespace std;
-using namespace sf;
+vector<string> ghostNames = {
+    "TELEPORTER", "RANDOMGHOST", "CHASER", "AMBUSHER",
+    "HERMES", "PHANTOM", "TIMESTOP", "RINGGHOST"
+};
+
+struct Dot {
+    CircleShape shape;
+    float speed;
+};
+
+void generateBackgroundDots(vector<Dot>& dots) {
+    for (int i = 0; i < 100; ++i) {
+        CircleShape dot(2);
+        dot.setFillColor(Color::White);
+        dot.setPosition(rand() % windowWidth, rand() % windowHeight);
+        float speed = 1.f + static_cast<float>(rand() % 100) / 100.f;
+        dots.push_back({ dot, speed });
+    }
+}
+
+vector<Ghost*> createMenuGhosts() {
+    random_device rd;
+    mt19937 gen(rd());
+    shuffle(ghostNames.begin(), ghostNames.end(), gen);
+    vector<Ghost*> ghosts;
+
+    for (int i = 0; i < 4; ++i) {
+        string ghostName = ghostNames[i];
+        string spriteSheetPath = "sprites/" + ghostName + ".png";
+
+        map<Direction, int> frameIndexes = {
+            {RIGHT, 0}, {UP, 1}, {DOWN, 2}, {LEFT, 3}
+        };
+
+        float x = -120.0f * (i + 1);
+        float y = 700.f;
+
+        Ghost* g = new Ghost(spriteSheetPath, 4, 50, 50, x, y, 2.0f, 5.0f, frameIndexes);
+        ghosts.push_back(g);
+    }
+
+    return ghosts;
+}
+
+void updateDots(vector<Dot>& dots) {
+    for (auto& d : dots) {
+        Vector2f pos = d.shape.getPosition();
+        pos.y += d.speed;
+        if (pos.y > windowHeight) pos.y = 0;
+        d.shape.setPosition(pos);
+    }
+}
+
+void spawnGameGhosts(vector<Ghost*>& gameGhosts, RenderWindow& window, const Maze& maze) {
+    vector<string> ghostNames = {
+        "TELEPORTER", "RANDOMGHOST", "CHASER", "AMBUSHER",
+        "HERMES", "PHANTOM", "TIMESTOP", "RINGGHOST"
+    };
+    random_device rd;
+    mt19937 gen(rd());
+    shuffle(ghostNames.begin(), ghostNames.end(), gen);
+
+    for (int i = 0; i < 4; ++i) {
+        string ghostName = ghostNames[i];
+        string spriteSheetPath = "sprites/" + ghostName + ".png";
+
+        map<Direction, int> frameIndexes = {
+            {RIGHT, 0}, {UP, 1}, {DOWN, 2}, {LEFT, 3}
+        };
+
+        Vector2i ghostPos = maze.getGhost(i + '0');
+
+        if (ghostPos.x == -1 || ghostPos.y == -1) continue;
+
+        static const int TILE_SIZE = 40;
+        float x = ghostPos.x * TILE_SIZE;
+        float y = ghostPos.y * TILE_SIZE;
+
+        Ghost* g = new Ghost(spriteSheetPath, 4, 50, 50, x+35, y+35, 2.0f, 1.0f, frameIndexes);
+        gameGhosts.push_back(g);
+    }
+}
+
+void drawMenu(RenderWindow& window, Text& title, vector<Text>& menuTexts, int selectedItem,
+    vector<Ghost*>& menuGhosts, vector<Dot>& dots, Pacman& pacman, bool inMenu) {
+
+    for (auto& d : dots)
+        window.draw(d.shape);
+
+    window.draw(title);
+
+    for (size_t i = 0; i < menuTexts.size(); ++i) {
+        menuTexts[i].setFillColor(i == selectedItem ? Color::Yellow : Color::White);
+        window.draw(menuTexts[i]);
+    }
+
+    if (inMenu) {
+        for (auto& g : menuGhosts) {
+            g->Move(RIGHT);
+            g->Update(1.0f / 60.0f);
+
+            window.draw(g->getSprite());
+
+            if (g->GetPosition().x > windowWidth + 50) {
+                g->Reset();
+            }
+        }
+    }
+
+    window.draw(pacman.getSprite());
+}
 
 void MainGame() {
-    int windowWidth = 960;
-    int windowHeight = 1050;
-
     RenderWindow window(VideoMode(windowWidth, windowHeight), "Pac-Man");
     window.setFramerateLimit(60);
 
     Font font;
-    font.loadFromFile("ArcadeClassic.ttf");
+    if (!font.loadFromFile("ArcadeClassic.ttf")) {
+        cerr << "Error: Could not load font ArcadeClassic.ttf" << endl;
+        return;
+    }
 
     Text title("PAC-MAN", font, 80);
     title.setFillColor(Color::Yellow);
@@ -45,34 +155,29 @@ void MainGame() {
         menuTexts.push_back(item);
     }
 
-    struct Dot { CircleShape shape; float speed; };
     vector<Dot> dots;
-    for (int i = 0; i < 100; ++i) {
-        CircleShape dot(2);
-        dot.setFillColor(Color::White);
-        dot.setPosition(rand() % windowWidth, rand() % windowHeight);
-        float speed = 1.f + static_cast<float>(rand() % 100) / 100.f;
-        dots.push_back({ dot, speed });
-    }
+    generateBackgroundDots(dots);
 
-    bool inMenu = true;
-    bool gameStarted = false;
     Maze maze;
-
-    // Setup Pacman
     Vector2i pacmanCell = maze.getP();
     Vector2f offset = maze.getOffset();
     float cellSize = Maze::getCellSize();
     Vector2f pacmanStartPos(pacmanCell.x * cellSize + offset.x, pacmanCell.y * cellSize + offset.y);
 
-    map<Direction, string> spritePaths = {
+    map<Direction, string> pacPaths = {
         { UP, "sprites/PACMANUP.PNG" },
         { DOWN, "sprites/PACMANDOWN.png" },
         { LEFT, "sprites/PACMANLEFT.png" },
         { RIGHT, "sprites/PACMANRIGHT.png" }
     };
 
-    Pacman pacman(spritePaths, 4, 50, 50, pacmanStartPos.x, pacmanStartPos.y, 2.0f);
+    Pacman pacman(pacPaths, 4, 50, 50, pacmanStartPos.x, pacmanStartPos.y, 2.0f);
+
+    vector<Ghost*> menuGhosts = createMenuGhosts();
+    vector<Ghost*> gameGhosts;
+
+    bool inMenu = true;
+    bool gameStarted = false;
 
     Clock clock;
 
@@ -94,6 +199,9 @@ void MainGame() {
                         if (selectedItem == 0) {
                             inMenu = false;
                             gameStarted = true;
+
+                            spawnGameGhosts(gameGhosts, window, maze);
+                            cout << "Game ghosts spawned: " << gameGhosts.size() << endl;
                         }
                         else if (selectedItem == 2) {
                             window.close();
@@ -109,7 +217,13 @@ void MainGame() {
             }
         }
 
-        if (gameStarted) {
+        window.clear(Color::Black);
+        updateDots(dots);
+
+        if (inMenu) {
+            drawMenu(window, title, menuTexts, selectedItem, menuGhosts, dots, pacman, inMenu);
+        }
+        else if (gameStarted) {
             Vector2f nextPos = pacman.GetPosition();
             float speed = 2.0f;
 
@@ -122,43 +236,40 @@ void MainGame() {
 
             if (maze.isWalkable(nextPos))
                 pacman.Move(pacman.GetDirection(), maze);
-            else if (maze.isWall(pacman.GetPosition())) {
-                pacman.Stop(pacman.GetDirection());  // Stop Pacman if it's about to collide with a wall
-            }
+            else if (maze.isWall(pacman.GetPosition()))
+                pacman.Stop(pacman.GetDirection());
 
-            maze.isFood(pacman.GetPosition()); // Check if Pacman eats food
-			maze.isSuperFood(pacman.GetPosition()); // Check if Pacman eats superfood
+            maze.isFood(pacman.GetPosition());
+            maze.isSuperFood(pacman.GetPosition());
 
             pacman.Update();
-        }
 
-        window.clear(Color::Black);
+            
 
-        for (auto& d : dots) {
-            Vector2f pos = d.shape.getPosition();
-            pos.y += d.speed;
-            if (pos.y > windowHeight) pos.y = 0;
-            d.shape.setPosition(pos);
-            window.draw(d.shape);
-        }
-
-        if (inMenu) {
-            window.draw(title);
-            for (size_t i = 0; i < menuTexts.size(); ++i) {
-                menuTexts[i].setFillColor(i == selectedItem ? Color::Yellow : Color::White);
-                window.draw(menuTexts[i]);
-            }
-        }
-        else if (gameStarted) {
             maze.draw(window);
             window.draw(pacman.getSprite());
+            for (auto g : gameGhosts) {
+                g->Move(RIGHT);
+                g->Update(dt);
+
+                if (g->GhostCollision(pacman.GetPosition())) {
+                    cout << "Pacman collided with a ghost!" << endl;
+                }
+                window.draw(g->getSprite());
+
+            }
+            
         }
 
         window.display();
     }
+
+    for (auto g : menuGhosts) delete g;
+    for (auto g : gameGhosts) delete g;
 }
 
+
 int main() {
-    MainGame();
+    MainGame();  // Run the main game loop
     return 0;
 }

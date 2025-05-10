@@ -41,7 +41,7 @@
     <ClInclude Include="Animation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Teleporter.h">
+    <ClInclude Include="SUbGhosts.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

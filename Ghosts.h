@@ -1,74 +1,89 @@
 #pragma once
-#include <map>
 #include "entity.h"
 #include "animation.h"
+#include <SFML/Graphics.hpp>
+#include <string>
+#include <iostream>
 
-class Ghost : public Entity {
-protected:
-     map<Direction, Texture> textures;
-    Animation animation;
-    Direction currentDirection;
-    Vector2f initialPosition;
 
-public:
-    Ghost(const  map<Direction,  string>& spriteSheetPaths,
-        int frameCount, int frameWidth, int frameHeight,
-        float x, float y, float spd)
-        : Entity(x, y, spd), animation(0.075f), currentDirection(LEFT), initialPosition(x, y)
-    {
-        for (const auto& pair : spriteSheetPaths) {
-            Direction dir = pair.first;
-            const string& path = pair.second;
+    class Ghost : public Entity {
+    private:
+        sf::Texture texture;
+        Animation animation;
+        Direction currentDirection;
+        sf::Vector2f initialPosition;
+        int frameWidth, frameHeight;
 
-            Texture tex;
-            if (!tex.loadFromFile(path)) {
-                cerr << "Failed to load ghost texture: " << path << endl;
-                continue;
+    public:
+        // Updated constructor to accept a map of frame indexes for each direction
+        Ghost(const std::string& spriteSheetPath,
+            int frameCount, int frameWidth, int frameHeight,
+            float x, float y, float speed, float scale,
+            const std::map<Direction, int>& frameIndexes)
+            : Entity(x, y, speed),
+            animation(0.1f),
+            currentDirection(LEFT),
+            initialPosition(x, y+20),
+            frameWidth(frameWidth),
+            frameHeight(frameHeight)
+        {
+            if (!texture.loadFromFile(spriteSheetPath)) {
+                std::cerr << "Failed to load ghost texture: " << spriteSheetPath << std::endl;
             }
-            textures[dir] = tex;
 
-            for (int i = 0; i < frameCount; ++i) {
-                animation.addDirectionalFrame(dir, IntRect(i * frameWidth, 0, frameWidth, frameHeight));
+            sprite.setTexture(texture);
+           
+            sprite.setScale(scale, scale);
+            sprite.setPosition(position);
+
+            // Add frames per direction based on the passed frameIndexes
+            for (const auto& pair : frameIndexes) {
+                Direction dir = pair.first;
+                int frameIndex = pair.second;
+
+                // Add the frame for the specified direction and frame index
+                animation.addDirectionalFrame(
+                    dir,
+                    sf::IntRect(frameIndex * frameWidth, static_cast<int>(dir) * frameHeight, frameWidth, frameHeight)
+                );
             }
         }
+    
 
-        sprite.setTexture(textures[LEFT]);
-        sprite.setPosition(position);
-    }
-    // Getter for the Ghost's position
-    Vector2f GetPosition() const {
-        return position;
-    }
-    // Check if the ghost collides with Pacman
-    bool GhostCollision(const Vector2f& pacmanPosition) {
-        // Simple collision check: if the positions are the same, it's a collision
-        
-        if (position == pacmanPosition) {
-            return true;  // Collision detected
-        }
 
-        return false;  // No collision
-    }
-    virtual void Move(Direction dir) {
+    void Move(Direction dir)  {
         currentDirection = dir;
+
         switch (dir) {
         case LEFT:  position.x -= speed; break;
         case RIGHT: position.x += speed; break;
         case UP:    position.y -= speed; break;
         case DOWN:  position.y += speed; break;
         }
+
         sprite.setPosition(position);
     }
 
-    void Update() {
-        sprite.setTexture(textures[currentDirection]);
-        animation.update(0.075f, currentDirection, sprite);
-        sprite.setPosition(position);
+    // Call this every frame with deltaTime
+    void Update(float deltaTime) {
+        animation.update(deltaTime, currentDirection, sprite);
     }
 
-    void Reset() override {
+    void Reset() {
         position = initialPosition;
         sprite.setPosition(position);
         animation.reset();
+    }
+
+    sf::Vector2f GetPosition() const {
+        return position;
+    }
+
+    sf::Sprite getSprite() const {
+        return sprite;
+    }
+
+    bool GhostCollision(const sf::Vector2f& pacmanPosition) const {
+        return sprite.getGlobalBounds().intersects(sf::FloatRect(pacmanPosition, sf::Vector2f(40, 40)));
     }
 };

@@ -149,7 +149,7 @@
     <ClInclude Include="entity.h" />
     <ClInclude Include="maze.h" />
     <ClInclude Include="Pacman.h" />
-    <ClInclude Include="Teleporter.h" />
+    <ClInclude Include="SUbGhosts.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

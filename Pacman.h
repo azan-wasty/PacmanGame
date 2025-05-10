@@ -43,6 +43,10 @@ public:
             currentDirection = dir;
         }
     }
+    void MenuMove() {
+        position.x += speed;
+        sprite.setPosition(position);
+    }
 
     void Move(Direction dir, Maze& maze) {
         Vector2f tempPosition = position;
@@ -66,7 +70,7 @@ public:
         // Wrap Pacman around horizontally if he exits screen
         float mazeWidth = Maze::getWidth() * Maze::getCellSize() + maze.getOffset().x;
         if (tempPosition.x < maze.getOffset().x) {
-            tempPosition.x = mazeWidth - sprite.getGlobalBounds().width; // Wrap to right
+            tempPosition.x = mazeWidth - sprite.getGlobalBounds().width-10; // Wrap to right
         }
         else if (tempPosition.x + sprite.getGlobalBounds().width > mazeWidth) {
             tempPosition.x = maze.getOffset().x; // Wrap to left
@@ -108,13 +112,13 @@ public:
 
   
 
-    void Update() override {
+    void Update()  {
         sprite.setTexture(textures[currentDirection]);
         animation.update(0.075f, currentDirection, sprite);
         sprite.setPosition(position);
     }
 
-    void Reset() override {
+    void Reset()  {
         position = initialPosition;
         sprite.setPosition(position);
         animation.reset();
