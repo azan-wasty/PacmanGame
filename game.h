@@ -23,7 +23,7 @@ private:
     Maze* maze;
 
     // Game state
-    int level = 0;
+   
     int score;
     int lives;
     bool gameOver;

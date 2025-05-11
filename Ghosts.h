@@ -1,6 +1,7 @@
 #pragma once
 #include "entity.h"
 #include "animation.h"
+#include"maze.h"
 #include <SFML/Graphics.hpp>
 #include <string>
 #include <iostream>
@@ -23,9 +24,10 @@
             : Entity(x, y, speed),
             animation(0.1f),
             currentDirection(LEFT),
-            initialPosition(x, y+20),
+            initialPosition(x, y),               //  CHANGED: Removed +20 from y
             frameWidth(frameWidth),
             frameHeight(frameHeight)
+
         {
             if (!texture.loadFromFile(spriteSheetPath)) {
                 std::cerr << "Failed to load ghost texture: " << spriteSheetPath << std::endl;
@@ -50,15 +52,45 @@
         }
     
 
+        void Move(Direction dir, Maze& maze) {
+            Vector2f tempPosition = position;
 
-    void Move(Direction dir)  {
+            switch (dir) {
+            case RIGHT: tempPosition.x += speed; break;
+            case LEFT:  tempPosition.x -= speed; break;
+            case UP:    tempPosition.y -= speed; break;
+            case DOWN:  tempPosition.y += speed; break;
+            }
+
+            FloatRect futureBounds = sprite.getGlobalBounds();
+            futureBounds.left = tempPosition.x;
+            futureBounds.top = tempPosition.y;
+
+            Vector2f center = {
+                futureBounds.left + futureBounds.width / 2,
+                futureBounds.top + futureBounds.height / 2
+            };
+
+            // Wrap Pacman around horizontally if he exits screen
+
+
+            if (maze.isWalkable(center)) {
+                position = tempPosition;
+                currentDirection = dir;
+                sprite.setPosition(position);
+            }
+            else {
+                currentDirection = dir;
+            }
+        }
+    void menMove(Direction dir)  {
         currentDirection = dir;
 
         switch (dir) {
-        case LEFT:  position.x -= speed; break;
-        case RIGHT: position.x += speed; break;
-        case UP:    position.y -= speed; break;
-        case DOWN:  position.y += speed; break;
+        case LEFT:  position.x -= speed; Update(1.0f / 60.0f); break;
+        case RIGHT: position.x += speed;  Update(1.0f / 60.0f); ; break;
+        case UP:    position.y -= speed;  Update(1.0f / 60.0f);  break;
+        case DOWN:  position.y += speed;  Update(1.0f / 60.0f); break;
         }
 
         sprite.setPosition(position);

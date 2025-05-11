@@ -44,6 +44,12 @@ vector<Ghost*> createMenuGhosts() {
     shuffle(ghostNames.begin(), ghostNames.end(), gen);
     vector<Ghost*> ghosts;
 
+    // Ensure that ghostNames contains at least 4 elements.
+    if (ghostNames.size() < 4) {
+        cerr << "Not enough ghost names to create menu ghosts!" << endl;
+        return ghosts;  // Return empty vector if there aren't enough names.
+    }
+
     for (int i = 0; i < 4; ++i) {
         string ghostName = ghostNames[i];
         string spriteSheetPath = "sprites/" + ghostName + ".png";
@@ -61,6 +67,7 @@ vector<Ghost*> createMenuGhosts() {
 
     return ghosts;
 }
+
 
 void updateDots(vector<Dot>& dots) {
     for (auto& d : dots) {
@@ -102,7 +109,7 @@ void spawnGameGhosts(vector<Ghost*>& gameGhosts, RenderWindow& window, const Maz
 }
 
 void drawMenu(RenderWindow& window, Text& title, vector<Text>& menuTexts, int selectedItem,
-    vector<Ghost*>& menuGhosts, vector<Dot>& dots, Pacman& pacman, bool inMenu) {
+    vector<Ghost*>& menuGhosts, vector<Dot>& dots, bool inMenu) {
 
     for (auto& d : dots)
         window.draw(d.shape);
@@ -115,20 +122,32 @@ void drawMenu(RenderWindow& window, Text& title, vector<Text>& menuTexts, int se
     }
 
     if (inMenu) {
-        for (auto& g : menuGhosts) {
-            g->Move(RIGHT);
+        // Define initial positions for the menu ghosts
+        static const float initialPositions[4] = { -120.f, -120.f, -120.f, -120.f };
+
+        for (int i = 0; i < 4; ++i) {
+            Ghost* g = menuGhosts[i];
+
+            // Move the ghost in the RIGHT direction
+            g->menMove(RIGHT);
+
+            // Update ghost's movement with fixed delta time
             g->Update(1.0f / 60.0f);
 
-            window.draw(g->getSprite());
-
-            if (g->GetPosition().x > windowWidth + 50) {
-                g->Reset();
+            if (g->GetPosition().x > windowWidth ) {
+                // Calculate new x-coordinate based on ghost index to maintain consistent spacing.
+                float newX = -190.f;  // Reset to initial position with a consistent step.
+                g->SetPosition(newX, 700.f);  // Reset y-coordinate if needed.
             }
+
+
+            window.draw(g->getSprite());
         }
     }
 
-    window.draw(pacman.getSprite());
 }
+
+
 
 void MainGame() {
     RenderWindow window(VideoMode(windowWidth, windowHeight), "Pac-Man");
@@ -221,7 +240,7 @@ void MainGame() {
         updateDots(dots);
 
         if (inMenu) {
-            drawMenu(window, title, menuTexts, selectedItem, menuGhosts, dots, pacman, inMenu);
+            drawMenu(window, title, menuTexts, selectedItem, menuGhosts, dots, inMenu);
         }
         else if (gameStarted) {
             Vector2f nextPos = pacman.GetPosition();
@@ -249,7 +268,7 @@ void MainGame() {
             maze.draw(window);
             window.draw(pacman.getSprite());
             for (auto g : gameGhosts) {
-                g->Move(RIGHT);
+                g->Move(RIGHT,maze);
                 g->Update(dt);
 
                 if (g->GhostCollision(pacman.GetPosition())) {
