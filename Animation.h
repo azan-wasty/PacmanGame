@@ -1,8 +1,8 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <vector>
-using namespace std;
-using namespace sf;
+
+
 enum Direction {
     RIGHT = 0,
     UP = 1,
@@ -11,8 +11,8 @@ enum Direction {
 };
 class Animation {
 private:
-     vector< IntRect> frames;
-     map<Direction,  vector< IntRect>> framesPerDirection;
+    std::vector<sf::IntRect> frames;
+    std::map<Direction, std::vector<sf::IntRect>> framesPerDirection;
     float durationPerFrame;
     float elapsed;
     size_t currentFrame;
@@ -22,16 +22,16 @@ public:
         : durationPerFrame(duration), elapsed(0.f), currentFrame(0) {
     }
 
-    void addFrame( IntRect rect) {
+    void addFrame(sf::IntRect rect) {
         frames.push_back(rect);
     }
 
-    void addDirectionalFrame(Direction dir,  IntRect rect)
+    void addDirectionalFrame(Direction dir, sf::IntRect rect)
     {
         framesPerDirection[dir].push_back(rect);
     }
 
-    void update(float dt, Direction dir,  Sprite& sprite) {
+    void update(float dt, Direction dir, sf::Sprite& sprite) {
         auto& dirFrames = framesPerDirection[dir];// identifing the frames associated with a particular direction, its a refrence to that particula vector
         if (dirFrames.empty()) return;
 
@@ -43,7 +43,7 @@ public:
         }
     }
 
-    void updatetele(Direction dir,  Sprite& sprite)
+    void updatetele(Direction dir, sf::Sprite& sprite)
     {
         if (frames.empty()) return;
 

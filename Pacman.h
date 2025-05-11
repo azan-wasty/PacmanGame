@@ -73,7 +73,7 @@ public:
             tempPosition.x = mazeWidth - sprite.getGlobalBounds().width-10; // Wrap to right
         }
         else if (tempPosition.x + sprite.getGlobalBounds().width > mazeWidth) {
-            tempPosition.x = maze.getOffset().x; // Wrap to left
+            tempPosition.x = maze.getOffset().x+10; // Wrap to left
         }
 
         if (maze.isWalkable(center)) {

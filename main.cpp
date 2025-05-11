@@ -54,8 +54,9 @@ vector<Ghost*> createMenuGhosts() {
         string ghostName = ghostNames[i];
         string spriteSheetPath = "sprites/" + ghostName + ".png";
 
+        // Create frame indexes for all four directions - using the same frame for all directions
         map<Direction, int> frameIndexes = {
-            {RIGHT, 0}, {UP, 1}, {DOWN, 2}, {LEFT, 3}
+            {RIGHT, 0}, {LEFT, 0}, {UP, 0}, {DOWN, 0}
         };
 
         float x = -120.0f * (i + 1);
@@ -68,7 +69,6 @@ vector<Ghost*> createMenuGhosts() {
     return ghosts;
 }
 
-
 void updateDots(vector<Dot>& dots) {
     for (auto& d : dots) {
         Vector2f pos = d.shape.getPosition();
@@ -78,21 +78,21 @@ void updateDots(vector<Dot>& dots) {
     }
 }
 
-void spawnGameGhosts(vector<Ghost*>& gameGhosts, RenderWindow& window, const Maze& maze) {
-    vector<string> ghostNames = {
-        "TELEPORTER", "RANDOMGHOST", "CHASER", "AMBUSHER",
-        "HERMES", "PHANTOM", "TIMESTOP", "RINGGHOST"
-    };
+// Function to create ghosts with supermode capability
+vector<Ghost*> spawnGameGhosts(RenderWindow& window, const Maze& maze) {
+    vector<Ghost*> gameGhosts;
+    vector<string> ghostNamesCopy = ghostNames;
     random_device rd;
     mt19937 gen(rd());
-    shuffle(ghostNames.begin(), ghostNames.end(), gen);
+    shuffle(ghostNamesCopy.begin(), ghostNamesCopy.end(), gen);
 
     for (int i = 0; i < 4; ++i) {
-        string ghostName = ghostNames[i];
+        string ghostName = ghostNamesCopy[i];
         string spriteSheetPath = "sprites/" + ghostName + ".png";
 
+        // Create frame indexes for all four directions
         map<Direction, int> frameIndexes = {
-            {RIGHT, 0}, {UP, 1}, {DOWN, 2}, {LEFT, 3}
+            {RIGHT, 0}, {LEFT, 0}, {UP, 0}, {DOWN, 0}
         };
 
         Vector2i ghostPos = maze.getGhost(i + '0');
@@ -103,9 +103,19 @@ void spawnGameGhosts(vector<Ghost*>& gameGhosts, RenderWindow& window, const Maz
         float x = ghostPos.x * TILE_SIZE;
         float y = ghostPos.y * TILE_SIZE;
 
-        Ghost* g = new Ghost(spriteSheetPath, 4, 50, 50, x+35, y+35, 2.0f, 1.0f, frameIndexes);
+        // Create ghost with frame indexes for normal movement
+        Ghost* g = new Ghost(spriteSheetPath, 16, 50, 50, x + 20, y + 20, 2.0f, 1.0f, frameIndexes);
+
+        // Initialize the frame map for supermode functionality
+        g->createFrameMap(16);
+
+        // Set initial frame
+        g->setFrame(1);
+
         gameGhosts.push_back(g);
     }
+
+    return gameGhosts;
 }
 
 void drawMenu(RenderWindow& window, Text& title, vector<Text>& menuTexts, int selectedItem,
@@ -122,34 +132,71 @@ void drawMenu(RenderWindow& window, Text& title, vector<Text>& menuTexts, int se
     }
 
     if (inMenu) {
-        // Define initial positions for the menu ghosts
-        static const float initialPositions[4] = { -120.f, -120.f, -120.f, -120.f };
-
-        for (int i = 0; i < 4; ++i) {
+        for (int i = 0; i < min(4, (int)menuGhosts.size()); ++i) {
             Ghost* g = menuGhosts[i];
 
             // Move the ghost in the RIGHT direction
             g->menMove(RIGHT);
 
-            // Update ghost's movement with fixed delta time
-            g->Update(1.0f / 60.0f);
-
-            if (g->GetPosition().x > windowWidth ) {
-                // Calculate new x-coordinate based on ghost index to maintain consistent spacing.
-                float newX = -190.f;  // Reset to initial position with a consistent step.
-                g->SetPosition(newX, 700.f);  // Reset y-coordinate if needed.
+            if (g->GetPosition().x > windowWidth) {
+                // Reset position when ghost goes off screen
+                float newX = -190.f;
+                g->SetPosition(newX, 700.f);
             }
-
 
             window.draw(g->getSprite());
         }
     }
-
 }
 
+// Ghost AI function to determine movement direction
+Direction getGhostDirection(Ghost* ghost, const Vector2f& pacmanPos, const Maze& maze, bool isPacmanSuperMode) {
+    // Get current ghost position
+    Vector2f ghostPos = ghost->GetPosition();
 
+    // If Pacman is in super mode, try to move away from Pacman
+    if (isPacmanSuperMode) {
+        // Calculate direction vector from Pacman to ghost
+        Vector2f dirVec = ghostPos - pacmanPos;
+
+        // Determine which direction to move based on the vector
+        if (abs(dirVec.x) > abs(dirVec.y)) {
+            // Move horizontally
+            return (dirVec.x > 0) ? RIGHT : LEFT;
+        }
+        else {
+            // Move vertically
+            return (dirVec.y > 0) ? DOWN : UP;
+        }
+    }
+    // Otherwise, random movement with a slight bias toward Pacman
+    else {
+        // 70% chance of moving toward Pacman, 30% chance of random movement
+        if (rand() % 100 < 70) {
+            // Calculate direction vector from ghost to Pacman
+            Vector2f dirVec = pacmanPos - ghostPos;
+
+            // Determine which direction to move based on the vector
+            if (abs(dirVec.x) > abs(dirVec.y)) {
+                // Move horizontally
+                return (dirVec.x > 0) ? RIGHT : LEFT;
+            }
+            else {
+                // Move vertically
+                return (dirVec.y > 0) ? DOWN : UP;
+            }
+        }
+        else {
+            // Random direction
+            Direction directions[4] = { LEFT, RIGHT, UP, DOWN };
+            return directions[rand() % 4];
+        }
+    }
+}
 
 void MainGame() {
+    srand(static_cast<unsigned int>(time(nullptr)));
+
     RenderWindow window(VideoMode(windowWidth, windowHeight), "Pac-Man");
     window.setFramerateLimit(60);
 
@@ -197,8 +244,16 @@ void MainGame() {
 
     bool inMenu = true;
     bool gameStarted = false;
+    bool isPacmanSuperMode = false;
+    float superModeTimer = 0.0f;
+    const float PACMAN_SUPER_MODE_DURATION = 10.0f; // 10 seconds of super mode
+
+    // Array to store ghost move timers
+    float ghostMoveTimers[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    const float GHOST_MOVE_INTERVAL = 0.1f; // Time between ghost direction changes
 
     Clock clock;
+    Clock gameClock; // For game time tracking
 
     while (window.isOpen()) {
         float dt = clock.restart().asSeconds();
@@ -219,7 +274,7 @@ void MainGame() {
                             inMenu = false;
                             gameStarted = true;
 
-                            spawnGameGhosts(gameGhosts, window, maze);
+                            gameGhosts = spawnGameGhosts(window, maze);
                             cout << "Game ghosts spawned: " << gameGhosts.size() << endl;
                         }
                         else if (selectedItem == 2) {
@@ -258,35 +313,88 @@ void MainGame() {
             else if (maze.isWall(pacman.GetPosition()))
                 pacman.Stop(pacman.GetDirection());
 
+            // Check if Pacman eats food
             maze.isFood(pacman.GetPosition());
-            maze.isSuperFood(pacman.GetPosition());
+
+            // Check if Pacman eats super food and activate super mode
+            if (maze.isSuperFood(pacman.GetPosition())) {
+                isPacmanSuperMode = true;
+                superModeTimer = PACMAN_SUPER_MODE_DURATION;
+                cout << "Pacman activated super mode!" << endl;
+            }
+
+            // Update super mode timer
+            if (isPacmanSuperMode) {
+                superModeTimer -= dt;
+                if (superModeTimer <= 0) {
+                    isPacmanSuperMode = false;
+                    cout << "Pacman super mode ended!" << endl;
+                }
+            }
 
             pacman.Update();
 
-            
-
             maze.draw(window);
             window.draw(pacman.getSprite());
-            for (auto g : gameGhosts) {
-                g->Move(RIGHT,maze);
+
+            // Update and draw ghosts
+            for (size_t i = 0; i < gameGhosts.size(); ++i) {
+                Ghost* g = gameGhosts[i];
+
+                // Update ghost move timer
+                ghostMoveTimers[i] += dt;
+
+                // Change direction periodically
+                if (ghostMoveTimers[i] >= GHOST_MOVE_INTERVAL) {
+                    Direction nextDir = getGhostDirection(g, pacman.GetPosition(), maze, isPacmanSuperMode);
+                    g->Move(nextDir, maze);
+                    ghostMoveTimers[i] = 0.0f;
+                }
+
+                // Update ghost animation
                 g->Update(dt);
 
+                // Handle collision with Pacman based on mode
                 if (g->GhostCollision(pacman.GetPosition())) {
-                    cout << "Pacman collided with a ghost!" << endl;
+                    if (isPacmanSuperMode) {
+                        // When Pacman is in super mode, activates ghost's super mode
+                        g->SuperMode(pacman.GetPosition());
+                        cout << "Ghost in super mode and returned to initial position!" << endl;
+                    }
+                    else {
+                        // When Pacman is not in super mode
+                        cout << "Pacman collided with a ghost! Game should end here." << endl;
+                        // Reset the game
+                        pacman.SetPosition(pacmanStartPos.x, pacmanStartPos.y);
+                    }
                 }
-                window.draw(g->getSprite());
 
+                window.draw(g->getSprite());
             }
-            
+
+            // Display game time
+            float gameTime = gameClock.getElapsedTime().asSeconds();
+            Text timeText("Time: " + to_string(int(gameTime)), font, 20);
+            timeText.setPosition(20, 900);
+            timeText.setFillColor(Color::White);
+            window.draw(timeText);
+
+            // Display super mode status
+            if (isPacmanSuperMode) {
+                Text superText("SUPER MODE: " + to_string(int(superModeTimer)), font, 20);
+                superText.setPosition(windowWidth - 200, 900);
+                superText.setFillColor(Color::Yellow);
+                window.draw(superText);
+            }
         }
 
         window.display();
     }
 
+    // Clean up memory
     for (auto g : menuGhosts) delete g;
     for (auto g : gameGhosts) delete g;
 }
-
 
 int main() {
     MainGame();  // Run the main game loop
