@@ -43,7 +43,7 @@ public:
         }
     }
 
-    void updatetele(Direction dir, sf::Sprite& sprite)
+    void updateGhost(Direction dir, sf::Sprite& sprite)
     {
         if (frames.empty()) return;
 

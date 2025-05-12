@@ -52,11 +52,10 @@ vector<Ghost*> createMenuGhosts() {
 
     for (int i = 0; i < 4; ++i) {
         string ghostName = ghostNames[i];
-        string spriteSheetPath = "sprites/" + ghostName + ".png";
+        string spriteSheetPath = "sprites/"+ghostName + ".png";
 
-        // Create frame indexes for all four directions - using the same frame for all directions
         map<Direction, int> frameIndexes = {
-            {RIGHT, 0}, {LEFT, 0}, {UP, 0}, {DOWN, 0}
+            {RIGHT, 0}, {UP, 1}, {DOWN, 2}, {LEFT, 3}
         };
 
         float x = -120.0f * (i + 1);
@@ -78,21 +77,22 @@ void updateDots(vector<Dot>& dots) {
     }
 }
 
-// Function to create ghosts with supermode capability
-vector<Ghost*> spawnGameGhosts(RenderWindow& window, const Maze& maze) {
-    vector<Ghost*> gameGhosts;
-    vector<string> ghostNamesCopy = ghostNames;
+void spawnGameGhosts(vector<Ghost*>& gameGhosts, const Maze& maze) {
+    vector<string> ghostNames = {
+        "RANDOMGHOST", "CHASER", "AMBUSHER", "PHANTOM",
+        "HERMES", "RINGGHOST"
+    };
+
     random_device rd;
     mt19937 gen(rd());
-    shuffle(ghostNamesCopy.begin(), ghostNamesCopy.end(), gen);
+    shuffle(ghostNames.begin(), ghostNames.end(), gen);
 
     for (int i = 0; i < 4; ++i) {
-        string ghostName = ghostNamesCopy[i];
-        string spriteSheetPath = "sprites/" + ghostName + ".png";
+        string ghostName = ghostNames[i];
+        string spriteSheetPath = "sprites/"+ghostName + ".png";
 
-        // Create frame indexes for all four directions
         map<Direction, int> frameIndexes = {
-            {RIGHT, 0}, {LEFT, 0}, {UP, 0}, {DOWN, 0}
+            {RIGHT, 0}, {UP, 1}, {DOWN, 2}, {LEFT, 3}
         };
 
         Vector2i ghostPos = maze.getGhost(i + '0');
@@ -103,19 +103,11 @@ vector<Ghost*> spawnGameGhosts(RenderWindow& window, const Maze& maze) {
         float x = ghostPos.x * TILE_SIZE;
         float y = ghostPos.y * TILE_SIZE;
 
-        // Create ghost with frame indexes for normal movement
-        Ghost* g = new Ghost(spriteSheetPath, 16, 50, 50, x + 20, y + 20, 2.0f, 1.0f, frameIndexes);
-
-        // Initialize the frame map for supermode functionality
-        g->createFrameMap(16);
-
-        // Set initial frame
-        g->setFrame(1);
-
+        Ghost* g = new Ghost(spriteSheetPath, 4, 50, 50,
+            x + 35, y + 35, 2.5f, 1.0f,
+            frameIndexes); // Removed GhostType argument
         gameGhosts.push_back(g);
     }
-
-    return gameGhosts;
 }
 
 void drawMenu(RenderWindow& window, Text& title, vector<Text>& menuTexts, int selectedItem,
@@ -132,16 +124,22 @@ void drawMenu(RenderWindow& window, Text& title, vector<Text>& menuTexts, int se
     }
 
     if (inMenu) {
-        for (int i = 0; i < min(4, (int)menuGhosts.size()); ++i) {
+        // Define initial positions for the menu ghosts
+        static const float initialPositions[4] = { -120.f, -120.f, -120.f, -120.f };
+
+        for (int i = 0; i < 4; ++i) {
             Ghost* g = menuGhosts[i];
 
             // Move the ghost in the RIGHT direction
             g->menMove(RIGHT);
 
+            // Update ghost's movement with fixed delta time
+            g->Update(1.0f / 60.0f);
+
             if (g->GetPosition().x > windowWidth) {
-                // Reset position when ghost goes off screen
-                float newX = -190.f;
-                g->SetPosition(newX, 700.f);
+                // Calculate new x-coordinate based on ghost index to maintain consistent spacing.
+                float newX = -190.f;  // Reset to initial position with a consistent step.
+                g->SetPosition(newX, 700.f);  // Reset y-coordinate if needed.
             }
 
             window.draw(g->getSprite());
@@ -149,54 +147,7 @@ void drawMenu(RenderWindow& window, Text& title, vector<Text>& menuTexts, int se
     }
 }
 
-// Ghost AI function to determine movement direction
-Direction getGhostDirection(Ghost* ghost, const Vector2f& pacmanPos, const Maze& maze, bool isPacmanSuperMode) {
-    // Get current ghost position
-    Vector2f ghostPos = ghost->GetPosition();
-
-    // If Pacman is in super mode, try to move away from Pacman
-    if (isPacmanSuperMode) {
-        // Calculate direction vector from Pacman to ghost
-        Vector2f dirVec = ghostPos - pacmanPos;
-
-        // Determine which direction to move based on the vector
-        if (abs(dirVec.x) > abs(dirVec.y)) {
-            // Move horizontally
-            return (dirVec.x > 0) ? RIGHT : LEFT;
-        }
-        else {
-            // Move vertically
-            return (dirVec.y > 0) ? DOWN : UP;
-        }
-    }
-    // Otherwise, random movement with a slight bias toward Pacman
-    else {
-        // 70% chance of moving toward Pacman, 30% chance of random movement
-        if (rand() % 100 < 70) {
-            // Calculate direction vector from ghost to Pacman
-            Vector2f dirVec = pacmanPos - ghostPos;
-
-            // Determine which direction to move based on the vector
-            if (abs(dirVec.x) > abs(dirVec.y)) {
-                // Move horizontally
-                return (dirVec.x > 0) ? RIGHT : LEFT;
-            }
-            else {
-                // Move vertically
-                return (dirVec.y > 0) ? DOWN : UP;
-            }
-        }
-        else {
-            // Random direction
-            Direction directions[4] = { LEFT, RIGHT, UP, DOWN };
-            return directions[rand() % 4];
-        }
-    }
-}
-
 void MainGame() {
-    srand(static_cast<unsigned int>(time(nullptr)));
-
     RenderWindow window(VideoMode(windowWidth, windowHeight), "Pac-Man");
     window.setFramerateLimit(60);
 
@@ -231,29 +182,21 @@ void MainGame() {
     Vector2f pacmanStartPos(pacmanCell.x * cellSize + offset.x, pacmanCell.y * cellSize + offset.y);
 
     map<Direction, string> pacPaths = {
-        { UP, "sprites/PACMANUP.PNG" },
+        { UP, "sprites/PACMANUP.png" },
         { DOWN, "sprites/PACMANDOWN.png" },
         { LEFT, "sprites/PACMANLEFT.png" },
         { RIGHT, "sprites/PACMANRIGHT.png" }
     };
 
-    Pacman pacman(pacPaths, 4, 50, 50, pacmanStartPos.x, pacmanStartPos.y, 2.0f);
+    Pacman pacman(pacPaths, 4, 50, 50, pacmanStartPos.x, pacmanStartPos.y, 2.5f);
 
     vector<Ghost*> menuGhosts = createMenuGhosts();
     vector<Ghost*> gameGhosts;
 
     bool inMenu = true;
     bool gameStarted = false;
-    bool isPacmanSuperMode = false;
-    float superModeTimer = 0.0f;
-    const float PACMAN_SUPER_MODE_DURATION = 10.0f; // 10 seconds of super mode
-
-    // Array to store ghost move timers
-    float ghostMoveTimers[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    const float GHOST_MOVE_INTERVAL = 0.1f; // Time between ghost direction changes
 
     Clock clock;
-    Clock gameClock; // For game time tracking
 
     while (window.isOpen()) {
         float dt = clock.restart().asSeconds();
@@ -274,7 +217,7 @@ void MainGame() {
                             inMenu = false;
                             gameStarted = true;
 
-                            gameGhosts = spawnGameGhosts(window, maze);
+                            spawnGameGhosts(gameGhosts, maze);
                             cout << "Game ghosts spawned: " << gameGhosts.size() << endl;
                         }
                         else if (selectedItem == 2) {
@@ -313,85 +256,28 @@ void MainGame() {
             else if (maze.isWall(pacman.GetPosition()))
                 pacman.Stop(pacman.GetDirection());
 
-            // Check if Pacman eats food
             maze.isFood(pacman.GetPosition());
-
-            // Check if Pacman eats super food and activate super mode
-            if (maze.isSuperFood(pacman.GetPosition())) {
-                isPacmanSuperMode = true;
-                superModeTimer = PACMAN_SUPER_MODE_DURATION;
-                cout << "Pacman activated super mode!" << endl;
-            }
-
-            // Update super mode timer
-            if (isPacmanSuperMode) {
-                superModeTimer -= dt;
-                if (superModeTimer <= 0) {
-                    isPacmanSuperMode = false;
-                    cout << "Pacman super mode ended!" << endl;
-                }
-            }
+            maze.isSuperFood(pacman.GetPosition());
 
             pacman.Update();
 
             maze.draw(window);
             window.draw(pacman.getSprite());
-
-            // Update and draw ghosts
-            for (size_t i = 0; i < gameGhosts.size(); ++i) {
-                Ghost* g = gameGhosts[i];
-
-                // Update ghost move timer
-                ghostMoveTimers[i] += dt;
-
-                // Change direction periodically
-                if (ghostMoveTimers[i] >= GHOST_MOVE_INTERVAL) {
-                    Direction nextDir = getGhostDirection(g, pacman.GetPosition(), maze, isPacmanSuperMode);
-                    g->Move(nextDir, maze);
-                    ghostMoveTimers[i] = 0.0f;
-                }
-
-                // Update ghost animation
+            for (auto g : gameGhosts) {
+                g->updateAutonomous(maze);
                 g->Update(dt);
 
-                // Handle collision with Pacman based on mode
                 if (g->GhostCollision(pacman.GetPosition())) {
-                    if (isPacmanSuperMode) {
-                        // When Pacman is in super mode, activates ghost's super mode
-                        g->SuperMode(pacman.GetPosition());
-                        cout << "Ghost in super mode and returned to initial position!" << endl;
-                    }
-                    else {
-                        // When Pacman is not in super mode
-                        cout << "Pacman collided with a ghost! Game should end here." << endl;
-                        // Reset the game
-                        pacman.SetPosition(pacmanStartPos.x, pacmanStartPos.y);
-                    }
+                    cout << "Pacman collided with a ghost!" << endl;
                 }
-
                 window.draw(g->getSprite());
             }
 
-            // Display game time
-            float gameTime = gameClock.getElapsedTime().asSeconds();
-            Text timeText("Time: " + to_string(int(gameTime)), font, 20);
-            timeText.setPosition(20, 900);
-            timeText.setFillColor(Color::White);
-            window.draw(timeText);
-
-            // Display super mode status
-            if (isPacmanSuperMode) {
-                Text superText("SUPER MODE: " + to_string(int(superModeTimer)), font, 20);
-                superText.setPosition(windowWidth - 200, 900);
-                superText.setFillColor(Color::Yellow);
-                window.draw(superText);
-            }
         }
 
         window.display();
     }
 
-    // Clean up memory
     for (auto g : menuGhosts) delete g;
     for (auto g : gameGhosts) delete g;
 }

@@ -15,6 +15,7 @@ private:
     static const int WIDTH = 23;
     static const int HEIGHT = 21;
     static const int CELL_SIZE = 40;
+    static const int WALL_THICKNESS = 4; // Reduced wall thickness for better appearance
 
     Vector2f offset;
     vector<string> map;
@@ -33,7 +34,7 @@ private:
         " #....#...#...#....# ",
         " ####.### # ###.#### ",
         "    #.#   0   #.#    ",
-        "#####.# ##=## #.#####",
+        "#####.# #   # #.#####",
         "     .  #123#  .     ",
         "#####.# ##### #.#####",
         "    #.#       #.#    ",
@@ -53,9 +54,9 @@ public:
         // Default offset position
         offset = Vector2f(60.f, 40.f);
 
-        // Initialize random wall color
+        // Initialize random wall color, but more aesthetically pleasing
         srand(static_cast<unsigned>(time(nullptr)));
-        wallColor = Color(rand() % 256, rand() % 256, rand() % 256);
+        wallColor = Color(20, 80, 200); // Start with a nice blue color
 
         // Initialize maze
         reset();
@@ -111,7 +112,7 @@ public:
         }
     }
     \
-    void draw(RenderWindow& window) {
+        void draw(RenderWindow& window) {
         // Handle super mode color with smooth transition effect
         Color drawColor;
         if (isSuperModeActive()) {
@@ -120,17 +121,17 @@ public:
             // Flash effect when super mode is about to expire (last 3 seconds)
             float remainingTime = getSuperModeTimeRemaining();
             if (remainingTime < 3.0f) {
-                // Flash between red and normal color
+                // Flash between blue and normal color
                 if (static_cast<int>(remainingTime * 5) % 2 == 0) {
-                    drawColor = Color::Red;
+                    drawColor = Color::Blue;
                 }
                 else {
-                    drawColor = wallColor;
+                    drawColor =Color:: Red;
                 }
             }
         }
         else {
-            drawColor = wallColor;
+            drawColor =Color:: Blue ;
         }
 
         // Draw timer if in super mode
@@ -143,37 +144,71 @@ public:
             window.draw(timerBar);
         }
 
-        // Apply rendering adjustment to fix alignment issue (+2, +2 pixels)
-        const float renderAdjustX = 2.0f;
-        const float renderAdjustY = 2.0f;
+        // Small rendering adjustment for visual consistency
+        const float renderAdjustX = -7.0f;
+        const float renderAdjustY = 10.0f;
 
+        // Improved maze rendering approach with node-based walls
         for (int row = 0; row < HEIGHT; ++row) {
             for (int col = 0; col < WIDTH; ++col) {
                 char tile = map[row][col];
-                // Apply rendering adjustment to visual positions
                 float x = offset.x + col * CELL_SIZE + renderAdjustX;
                 float y = offset.y + row * CELL_SIZE + renderAdjustY;
 
                 if (tile == '#') {
-                    RectangleShape wall(Vector2f(CELL_SIZE, CELL_SIZE));
-                    wall.setPosition(x, y+15);
-                    wall.setFillColor(drawColor);
-                    wall.setOutlineColor(Color::White);
-                    wall.setOutlineThickness(2);
-                    window.draw(wall);
+                    // Check wall connections in all four directions
+                    bool wallAbove = (row > 0 && map[row - 1][col] == '#');
+                    bool wallBelow = (row < HEIGHT - 1 && map[row + 1][col] == '#');
+                    bool wallLeft = (col > 0 && map[row][col - 1] == '#');
+                    bool wallRight = (col < WIDTH - 1 && map[row][col + 1] == '#');
+
+                    // Draw a wall node
+                    RectangleShape nodeRect(Vector2f(WALL_THICKNESS, WALL_THICKNESS));
+                    nodeRect.setPosition(x + 10 + CELL_SIZE / 2 - WALL_THICKNESS / 2, y + 10 + CELL_SIZE / 2 - WALL_THICKNESS / 2);
+                    nodeRect.setFillColor(drawColor);
+                    window.draw(nodeRect);
+
+                    // Draw wall connections
+                    if (wallAbove) {
+                        RectangleShape wallLine(Vector2f(WALL_THICKNESS, CELL_SIZE / 2 + WALL_THICKNESS / 2));
+                        wallLine.setPosition(x + 10 + CELL_SIZE / 2 - WALL_THICKNESS / 2, y + 10);
+                        wallLine.setFillColor(drawColor);
+                        window.draw(wallLine);
+                    }
+
+                    if (wallBelow) {
+                        RectangleShape wallLine(Vector2f(WALL_THICKNESS, CELL_SIZE / 2 + WALL_THICKNESS / 2));
+                        wallLine.setPosition(x + 10 + CELL_SIZE / 2 - WALL_THICKNESS / 2, y + 10 + CELL_SIZE / 2);
+                        wallLine.setFillColor(drawColor);
+                        window.draw(wallLine);
+                    }
+
+                    if (wallLeft) {
+                        RectangleShape wallLine(Vector2f(CELL_SIZE / 2 + WALL_THICKNESS / 2, WALL_THICKNESS));
+                        wallLine.setPosition(x + 10, y + 10 + CELL_SIZE / 2 - WALL_THICKNESS / 2);
+                        wallLine.setFillColor(drawColor);
+                        window.draw(wallLine);
+                    }
+
+                    if (wallRight) {
+                        RectangleShape wallLine(Vector2f(CELL_SIZE / 2 + WALL_THICKNESS / 2, WALL_THICKNESS));
+                        wallLine.setPosition(x + 10 + CELL_SIZE / 2, y + 10 + CELL_SIZE / 2 - WALL_THICKNESS / 2);
+                        wallLine.setFillColor(drawColor);
+                        window.draw(wallLine);
+                    }
                 }
                 else if (tile == '.') {
-                    CircleShape dot(CELL_SIZE / 8);
+                    CircleShape dot(CELL_SIZE / 10);
                     dot.setFillColor(Color::White);
                     // Center the dot in the cell
-                    dot.setPosition(x + CELL_SIZE / 2.5f, y +15+ CELL_SIZE / 2.5f);
+                    dot.setPosition(x + 10 + CELL_SIZE / 2 - CELL_SIZE / 10, y + 10 + CELL_SIZE / 2 - CELL_SIZE / 10);
                     window.draw(dot);
                 }
                 else if (tile == 'o') {
-                    CircleShape energizer(CELL_SIZE / 4);
+                    CircleShape energizer(CELL_SIZE / 5);
                     energizer.setFillColor(Color::Yellow);
                     // Center the energizer in the cell
-                    energizer.setPosition(x + CELL_SIZE / 3.f, y +15+ CELL_SIZE / 3.f);
+                    energizer.setPosition(x + 10 + CELL_SIZE / 2 - CELL_SIZE / 5, y + 10 + CELL_SIZE / 2 - CELL_SIZE / 5);
                     window.draw(energizer);
                 }
             }
@@ -190,68 +225,69 @@ public:
         return ' ';
     }
 
+    // Check if a cell is a wall (same as before)
+    // Check if a cell is a wall (same as before)
     bool isWall(Vector2f pos) const {
         Vector2i cell = getCell(pos);
         return getTile(cell.y, cell.x) == '#';
     }
 
-    // Check if position is aligned with grid
+    // Check if position is aligned with vertical or horizontal grid lines
     bool isAlignedWithGrid(Vector2f position) {
-        float cellX = (position.x - offset.x);
-        float cellY = (position.y - offset.y);
+        float cellX = position.x - offset.x;
+        float cellY = position.y - offset.y;
 
-        // Check if position is close to center of a cell
-        return (fabs(fmod(cellX, CELL_SIZE) - CELL_SIZE / 2.0f) < 2.0f &&
-            fabs(fmod(cellY, CELL_SIZE) - CELL_SIZE / 2.0f) < 2.0f);
+        return (fmod(cellX, CELL_SIZE) < 1.0f || fmod(cellX, CELL_SIZE) > CELL_SIZE - 1.0f ||
+            fmod(cellY, CELL_SIZE) < 1.0f || fmod(cellY, CELL_SIZE) > CELL_SIZE - 1.0f);
     }
 
-    // Get the center of the current cell
-    Vector2f getCellCenter(Vector2f position) {
-        Vector2i cell = getCell(position);
-        return Vector2f(
-            offset.x + cell.x * CELL_SIZE + CELL_SIZE / 2.0f,
-            offset.y + cell.y * CELL_SIZE + CELL_SIZE / 2.0f
-        );
+    // Return the nearest grid line intersection point
+    Vector2f getNearestGridIntersection(Vector2f position) {
+        int xLine = static_cast<int>((position.x - offset.x) / CELL_SIZE);
+        int yLine = static_cast<int>((position.y - offset.y) / CELL_SIZE);
+
+        float nearestX = offset.x + xLine * CELL_SIZE;
+        float nearestY = offset.y + yLine * CELL_SIZE;
+
+        return Vector2f(nearestX, nearestY);
     }
 
-    // Improved movement validation
+    // Check if movement is valid along the line-based grid
     bool canMove(Vector2f currentPos, Vector2f direction) {
-        // Find target position
         Vector2f targetPos = currentPos + direction;
 
-        // Get current and target cells
         Vector2i currentCell = getCell(currentPos);
         Vector2i targetCell = getCell(targetPos);
 
-        // If trying to move to a different cell
-        if (currentCell.x != targetCell.x || currentCell.y != targetCell.y) {
-            // Check if the target cell is a wall
-            if (getTile(targetCell.y, targetCell.x) == '#') {
-                return false;
-            }
+        // Disallow movement outside grid
+        if (targetCell.x < 0 || targetCell.x >= WIDTH ||
+            targetCell.y < 0 || targetCell.y >= HEIGHT) {
+            return false;
+        }
 
-            // When moving diagonally or at corners, ensure path is clear
-            if (direction.x != 0 && direction.y != 0) {
-                // Check for diagonal movement through walls
-                if (getTile(currentCell.y, targetCell.x) == '#' ||
-                    getTile(targetCell.y, currentCell.x) == '#') {
-                    return false;
-                }
-            }
+        // For horizontal or vertical movement only
+        if (direction.x != 0 && direction.y != 0) {
+            return false; // Disallow diagonal movement
+        }
+
+        // Check for wall in target direction
+        if (getTile(targetCell.y, targetCell.x) == '#') {
+            return false;
         }
 
         return true;
     }
 
+    // Checks if a position lies along a valid walkable line
     bool isWalkable(Vector2f position) {
-        int col = static_cast<int>((position.x - offset.x) / CELL_SIZE);
-        int row = static_cast<int>((position.y - offset.y) / CELL_SIZE);
-
-        if (row < 0 || row >= HEIGHT || col < 0 || col >= WIDTH)
+        Vector2i cell = getCell(position);
+        if (cell.y < 0 || cell.y >= HEIGHT || cell.x < 0 || cell.x >= WIDTH)
             return false;
 
-        return map[row][col] != '#';
+        return map[cell.y][cell.x] != '#';
     }
+
+
 
     bool isFood(Vector2f pos) {
         Vector2i cell = getCell(pos);
@@ -316,7 +352,14 @@ public:
             offset.y + cell.y * CELL_SIZE + CELL_SIZE / 2.0f
         );
     }
-
+    // Get the center of the current cell
+    Vector2f getCellCenter(Vector2f position) {
+        Vector2i cell = getCell(position);
+        return Vector2f(
+            offset.x + cell.x * CELL_SIZE + CELL_SIZE / 2.0f,
+            offset.y + cell.y * CELL_SIZE + CELL_SIZE / 2.0f
+        );
+    }
     // Convert grid cell coordinates to world position
     Vector2f cellToPosition(int col, int row) {
         return Vector2f(
