@@ -15,7 +15,7 @@ private:
     static const int WIDTH = 23;
     static const int HEIGHT = 21;
     static const int CELL_SIZE = 40;
-    static const int WALL_THICKNESS = 4; // Reduced wall thickness for better appearance
+    static const int WALL_THICKNESS = 9; // Reduced wall thickness for better appearance
 
     Vector2f offset;
     vector<string> map;
@@ -116,7 +116,7 @@ public:
         // Handle super mode color with smooth transition effect
         Color drawColor;
         if (isSuperModeActive()) {
-            drawColor = Color::Red;
+            drawColor = Color::Yellow;
 
             // Flash effect when super mode is about to expire (last 3 seconds)
             float remainingTime = getSuperModeTimeRemaining();
@@ -126,7 +126,7 @@ public:
                     drawColor = Color::Blue;
                 }
                 else {
-                    drawColor =Color:: Red;
+                    drawColor =Color:: Yellow;
                 }
             }
         }
@@ -201,14 +201,14 @@ public:
                     CircleShape dot(CELL_SIZE / 10);
                     dot.setFillColor(Color::White);
                     // Center the dot in the cell
-                    dot.setPosition(x + 10 + CELL_SIZE / 2 - CELL_SIZE / 10, y + 10 + CELL_SIZE / 2 - CELL_SIZE / 10);
+                    dot.setPosition(x + 14 + CELL_SIZE / 2 - CELL_SIZE / 10, y + 10 + CELL_SIZE / 2 - CELL_SIZE / 10);
                     window.draw(dot);
                 }
                 else if (tile == 'o') {
                     CircleShape energizer(CELL_SIZE / 5);
                     energizer.setFillColor(Color::Yellow);
                     // Center the energizer in the cell
-                    energizer.setPosition(x + 10 + CELL_SIZE / 2 - CELL_SIZE / 5, y + 10 + CELL_SIZE / 2 - CELL_SIZE / 5);
+                    energizer.setPosition(x + 14 + CELL_SIZE / 2 - CELL_SIZE / 5, y + 10 + CELL_SIZE / 2 - CELL_SIZE / 5);
                     window.draw(energizer);
                 }
             }

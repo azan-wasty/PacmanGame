@@ -9,7 +9,7 @@ private:
     Animation animation;
     Direction currentDirection;
     Vector2f initialPosition;
-    float scaleFactor = 0.77f;  
+    float scaleFactor = 0.85f;  
 
 public:
     Pacman(const map<Direction, string>& spriteSheetPaths,
@@ -110,8 +110,12 @@ public:
         return currentDirection;
     }
 
-  
-
+    void SuperScale() {
+        sprite.setScale(1.f, 1.f);  // Scale up sprite
+    }
+    void ResetScale() {
+        sprite.setScale(scaleFactor,scaleFactor);  // Scale up sprite
+    }
     void Update()  {
         sprite.setTexture(textures[currentDirection]);
         animation.update(0.075f, currentDirection, sprite);

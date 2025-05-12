@@ -1,5 +1,4 @@
-﻿
-#include "entity.h"
+﻿#include "entity.h"
 #include "animation.h"
 #include "maze.h"
 #include <SFML/Graphics.hpp>
@@ -22,6 +21,7 @@ private:
     bool isScattered;        // For alternating between scatter and random movement
     float scatterTimer;      // For timing scatter/random phases
     const float SCATTER_DURATION = 7.0f;  // Seconds in scatter mode
+    sf::Color originalColor; // Store the original color for restoration after super mode
 
     // Constants for cell-based movement
     static const int CELL_SIZE = 40;
@@ -48,6 +48,7 @@ public:
         sprite.setTexture(texture);
         sprite.setScale(scale, scale);
         sprite.setPosition(position);
+        originalColor = sprite.getColor(); // Store the original color
 
         for (int i = 0; i < 4; ++i) {
             animation.addFrame(sf::IntRect(i * frameWidth, 0, frameWidth, frameHeight)); // horizontal layout
@@ -77,7 +78,6 @@ public:
         return false;  // Blocked by wall
     }
 
-
     void menMove(Direction dir) {
         currentDirection = dir;
 
@@ -93,7 +93,7 @@ public:
     }
 
     void Update(float deltaTime) {
-        animation.updateGhost( currentDirection, sprite);
+        animation.updateGhost(currentDirection, sprite);
     }
 
     void Reset() {
@@ -104,10 +104,17 @@ public:
         scatterTimer = 0.0f;
         behaviorTimer = 0.0f;
         animation.reset();
+        sprite.setColor(originalColor); // Reset to original color
     }
 
     sf::Vector2f GetPosition() const {
         return position;
+    }
+
+    void SetPosition(float x, float y) {
+        position.x = x;
+        position.y = y;
+        sprite.setPosition(position);
     }
 
     sf::Sprite getSprite() const {
@@ -120,7 +127,7 @@ public:
 
     void updateAutonomous(Maze& maze) {
         float deltaTime = 1.0f / 60.0f;
-
+        
         // Try to move in current direction
         if (!Move(currentDirection, maze)) {
             // If blocked, pick a new valid direction (excluding opposite)
@@ -143,7 +150,6 @@ public:
 
         Update(deltaTime);
     }
-
 
     std::vector<Direction> getAvailableDirections(Maze& maze) {
         std::vector<Direction> dirs;
@@ -192,9 +198,6 @@ public:
         }
     }
 
-    // Check if the ghost can move in the specified direction
-   // Inside the Ghost class...
-
     bool isAwayFromCenterEnough() const {
         float minDistance = 25.0f;  // Ghost must be at least this far from cell center
 
@@ -225,6 +228,13 @@ public:
         return maze.isWalkable(testPos);
     }
 
+    // Set the color of the ghost for super mode
+    void setColor(const sf::Color& color) {
+        sprite.setColor(color);
+    }
 
-
+    // Get the original color of the ghost
+    sf::Color getOriginalColor() const {
+        return originalColor;
+    }
 };

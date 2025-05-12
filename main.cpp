@@ -11,7 +11,9 @@
 #include <algorithm>
 #include <random>
 #include <iostream>
-
+#include <SFML/Audio.hpp>
+#include <SFML/System.hpp>
+#include <thread>
 using namespace std;
 using namespace sf;
 
@@ -26,15 +28,103 @@ vector<string> ghostNames = {
 struct Dot {
     CircleShape shape;
     float speed;
+    float angle;  // For circular motion
+    float radius; // For circular motion
+    Vector2f center; // Center point for circular motion
+    float oscillation; // For pulsing
+    bool isPulsing; // Whether this dot pulses
 };
 
+// Global music object (declared outside to avoid scope issues)
+sf::Music menuMusic;
+sf::Music superMusic;
+void playMenuMusic() {
+    // Load the music file
+    if (!menuMusic.openFromFile("pm.ogg")) {
+        std::cerr << "Error: Could not load pm.ogg\n";
+        return;
+    }
+
+    // Set up the music properties
+    menuMusic.setLoop(true);   // Ensure it loops
+    menuMusic.setVolume(50);   // Adjust volume (0-100)
+
+    // Play the music
+    menuMusic.play();
+}
+
+
+
+void playSuperMusic() {
+    // Load the music file
+    if (!superMusic.openFromFile("ssj3.wav")) {
+        std::cerr << "Error: Could not load ssj3.wav\n";
+        return;
+    }
+
+    // Set up the music properties
+   
+    menuMusic.setVolume(75);   // Adjust volume (0-100)
+
+    // Play the music
+    superMusic.play();
+}
+void stopMenuMusic() {
+    if (menuMusic.getStatus() == sf::Music::Playing) {
+        menuMusic.stop();
+    }
+}
+void stopsuperMusic() {
+    if (superMusic.getStatus() == sf::Music::Playing) {
+        superMusic.stop();
+    }
+}
+
 void generateBackgroundDots(vector<Dot>& dots) {
-    for (int i = 0; i < 100; ++i) {
-        CircleShape dot(2);
-        dot.setFillColor(Color::White);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> angleDist(0.0f, 2.0f * 3.14159f);
+    std::uniform_real_distribution<float> radiusDist(100.0f, 350.0f);
+    std::uniform_real_distribution<float> speedDist(0.5f, 2.5f);
+    std::uniform_real_distribution<float> oscDist(0.0f, 2.0f * 3.14159f);
+    std::bernoulli_distribution isPulsingDist(0.3f); // 30% chance for pulsing dots
+
+    // Create standard moving dots
+    for (int i = 0; i < 50; ++i) {
+        CircleShape dot(2 + static_cast<float>(rand() % 3)); // Varied sizes
+
+        // Random vibrant colors for some dots
+        if (rand() % 5 == 0) { // 20% chance for colored dots
+            dot.setFillColor(Color(rand() % 255, rand() % 255, rand() % 255, 150 + rand() % 100));
+        }
+        else {
+            dot.setFillColor(Color(200, 200, 200, 150 + rand() % 100)); // White/gray with alpha
+        }
+
         dot.setPosition(rand() % windowWidth, rand() % windowHeight);
-        float speed = 1.f + static_cast<float>(rand() % 100) / 100.f;
-        dots.push_back({ dot, speed });
+        float speed = speedDist(gen);
+        dots.push_back({ dot, speed, 0, 0, {0, 0}, 0, false });
+    }
+
+    // Create orbital dots
+    for (int i = 0; i < 30; ++i) {
+        CircleShape dot(1 + static_cast<float>(rand() % 2));
+        dot.setFillColor(Color::Yellow);
+
+        Vector2f center(windowWidth / 2.0f, 300.0f);
+        float radius = radiusDist(gen);
+        float angle = angleDist(gen);
+        float speed = speedDist(gen) * 0.5f;
+
+        // Calculate position based on center, radius and angle
+        float x = center.x + radius * cos(angle);
+        float y = center.y + radius * sin(angle);
+        dot.setPosition(x, y);
+
+        bool isPulsing = isPulsingDist(gen);
+        float oscillation = oscDist(gen);
+
+        dots.push_back({ dot, speed, angle, radius, center, oscillation, isPulsing });
     }
 }
 
@@ -43,37 +133,61 @@ vector<Ghost*> createMenuGhosts() {
     mt19937 gen(rd());
     shuffle(ghostNames.begin(), ghostNames.end(), gen);
     vector<Ghost*> ghosts;
-
     // Ensure that ghostNames contains at least 4 elements.
     if (ghostNames.size() < 4) {
         cerr << "Not enough ghost names to create menu ghosts!" << endl;
         return ghosts;  // Return empty vector if there aren't enough names.
     }
-
-    for (int i = 0; i < 4; ++i) {
+    // Create ghosts with different starting positions and speeds
+    for (float i = 0; i < 4; ++i) {
         string ghostName = ghostNames[i];
-        string spriteSheetPath = "sprites/"+ghostName + ".png";
-
+        string spriteSheetPath = "sprites/" + ghostName + ".png";
         map<Direction, int> frameIndexes = {
             {RIGHT, 0}, {UP, 1}, {DOWN, 2}, {LEFT, 3}
         };
 
-        float x = -120.0f * (i + 1);
-        float y = 700.f;
-
-        Ghost* g = new Ghost(spriteSheetPath, 4, 50, 50, x, y, 2.0f, 5.0f, frameIndexes);
+        // Stagger initial positions for a "chase" effect
+        float x = -120.0f - (i * 150.0f);
+        float y = 640.0f + fmod(i * 30.0f, 80.0f);  // Vary vertical positions slightly
+        // Vary speeds slightly for more dynamic movement
+        float ghostSpeed = 2.0f + (i * 0.5f);
+        Ghost* g = new Ghost(spriteSheetPath, 4, 50, 50, x, y, ghostSpeed, 5.0f, frameIndexes);
         ghosts.push_back(g);
     }
-
     return ghosts;
-}
+}   
 
-void updateDots(vector<Dot>& dots) {
+void updateDots(vector<Dot>& dots, float dt) {
     for (auto& d : dots) {
-        Vector2f pos = d.shape.getPosition();
-        pos.y += d.speed;
-        if (pos.y > windowHeight) pos.y = 0;
-        d.shape.setPosition(pos);
+        if (d.radius > 0) {
+            // This is an orbital dot
+            d.angle += d.speed * dt;
+
+            // Calculate new position based on center, radius and updated angle
+            float x = d.center.x + d.radius * cos(d.angle);
+            float y = d.center.y + d.radius * sin(d.angle);
+
+            d.shape.setPosition(x, y);
+
+            // Handle pulsing effect
+            if (d.isPulsing) {
+                d.oscillation += dt * 3.0f;
+                float scale = 0.7f + 0.3f * sin(d.oscillation);
+                float currentRadius = d.shape.getRadius();
+                d.shape.setRadius(currentRadius * scale);
+
+                // Adjust color based on oscillation
+                float brightness = 150 + 105 * sin(d.oscillation);
+                d.shape.setFillColor(Color(255, 255, brightness, 200));
+            }
+        }
+        else {
+            // This is a standard moving dot
+            Vector2f pos = d.shape.getPosition();
+            pos.y += d.speed;
+            if (pos.y > windowHeight) pos.y = 0;
+            d.shape.setPosition(pos);
+        }
     }
 }
 
@@ -89,7 +203,7 @@ void spawnGameGhosts(vector<Ghost*>& gameGhosts, const Maze& maze) {
 
     for (int i = 0; i < 4; ++i) {
         string ghostName = ghostNames[i];
-        string spriteSheetPath = "sprites/"+ghostName + ".png";
+        string spriteSheetPath = "sprites/" + ghostName + ".png";
 
         map<Direction, int> frameIndexes = {
             {RIGHT, 0}, {UP, 1}, {DOWN, 2}, {LEFT, 3}
@@ -104,46 +218,188 @@ void spawnGameGhosts(vector<Ghost*>& gameGhosts, const Maze& maze) {
         float y = ghostPos.y * TILE_SIZE;
 
         Ghost* g = new Ghost(spriteSheetPath, 4, 50, 50,
-            x + 35, y + 35, 2.5f, 1.0f,
-            frameIndexes); // Removed GhostType argument
+            x + TILE_SIZE / 2, y + TILE_SIZE / 2, 2.5f, 1.3f,
+            frameIndexes);
         gameGhosts.push_back(g);
     }
 }
 
 void drawMenu(RenderWindow& window, Text& title, vector<Text>& menuTexts, int selectedItem,
-    vector<Ghost*>& menuGhosts, vector<Dot>& dots, bool inMenu) {
+    vector<Ghost*>& menuGhosts, vector<Dot>& dots, float dt, bool inMenu) {
 
+    // Draw background
     for (auto& d : dots)
         window.draw(d.shape);
 
+    // Create a pulsing effect for the title
+    static float titlePulseTimer = 0.0f;
+    titlePulseTimer += dt;
+    float titleScale = 1.0f + 0.05f * sin(titlePulseTimer * 3.0f);
+    title.setScale(titleScale, titleScale);
+
+    // Smoothly change title color
+    int r = 255;  // Keep red at max for yellow
+    int g = 255;  // Keep green at max for yellow
+    int b = static_cast<int>(60 + 40 * sin(titlePulseTimer * 2.0f));  // Subtle blue pulsing
+    title.setFillColor(Color(r, g, b));
+
+    // Draw title with drop shadow for better visibility
+    Text shadowTitle = title;
+    shadowTitle.setFillColor(Color(30, 30, 30, 150));
+    shadowTitle.setPosition(title.getPosition() + Vector2f(3, 3));
+    window.draw(shadowTitle);
     window.draw(title);
 
+    // Draw menu options with hover effect
     for (size_t i = 0; i < menuTexts.size(); ++i) {
-        menuTexts[i].setFillColor(i == selectedItem ? Color::Yellow : Color::White);
+        // Set the base color
+        Color baseColor = (i == selectedItem) ? Color::Yellow : Color::White;
+
+        // Add pulsing effect to selected item
+        if (i == selectedItem) {
+            float pulseValue = 0.7f + 0.3f * sin(titlePulseTimer * 5.0f);
+            baseColor = Color(
+                static_cast<Uint8>(255 * pulseValue),
+                static_cast<Uint8>(255 * pulseValue),
+                static_cast<Uint8>(50)
+            );
+
+            // Make selected item larger
+            menuTexts[i].setScale(1.1f, 1.1f);
+
+            // Add an arrow cursor - FIX: Use two separate characters ">>" instead of a string literal
+            Text arrow;
+            arrow.setString(">");  // Single character
+            arrow.setFont(*menuTexts[i].getFont());
+            arrow.setCharacterSize(40);
+            arrow.setFillColor(baseColor);
+
+            // Position the first arrow
+            arrow.setPosition(
+                menuTexts[i].getPosition().x - arrow.getGlobalBounds().width - 15,
+                menuTexts[i].getPosition().y
+            );
+            window.draw(arrow);
+
+            // Position the second arrow
+            arrow.setPosition(
+                menuTexts[i].getPosition().x - arrow.getGlobalBounds().width * 2 - 10,
+                menuTexts[i].getPosition().y
+            );
+            window.draw(arrow);
+        }
+        else {
+            menuTexts[i].setScale(1.0f, 1.0f);
+        }
+
+        menuTexts[i].setFillColor(baseColor);
+
+        // Draw shadow for better visibility
+        Text shadowText = menuTexts[i];
+        shadowText.setFillColor(Color(30, 30, 30, 150));
+        shadowText.setPosition(menuTexts[i].getPosition() + Vector2f(2, 2));
+        shadowText.setScale(menuTexts[i].getScale());
+        window.draw(shadowText);
+
         window.draw(menuTexts[i]);
     }
 
     if (inMenu) {
-        // Define initial positions for the menu ghosts
-        static const float initialPositions[4] = { -120.f, -120.f, -120.f, -120.f };
-
-        for (int i = 0; i < 4; ++i) {
+        // Move and draw the menu ghosts
+        for (int i = 0; i < static_cast<int>(menuGhosts.size()); ++i) {
             Ghost* g = menuGhosts[i];
 
             // Move the ghost in the RIGHT direction
             g->menMove(RIGHT);
 
-            // Update ghost's movement with fixed delta time
-            g->Update(1.0f / 60.0f);
+            // Update ghost's movement
+            g->Update(dt);
 
             if (g->GetPosition().x > windowWidth) {
-                // Calculate new x-coordinate based on ghost index to maintain consistent spacing.
-                float newX = -190.f;  // Reset to initial position with a consistent step.
-                g->SetPosition(newX, 700.f);  // Reset y-coordinate if needed.
+                // Calculate new x-coordinate based on ghost index
+                float newX = -190.f - (rand() % 100);  // Add some randomness
+                float newY = 640.f + (rand() % 80);    // Vary vertical position too
+                g->SetPosition(newX, newY);
             }
 
             window.draw(g->getSprite());
         }
+
+        // Draw "Press Enter to Start" flashing text - FIX: Use a more appropriate format
+        static float flashTimer = 0.0f;
+        flashTimer += dt;
+        if (sin(flashTimer * 3.0f) > 0) {  // Flash at 3Hz
+            Text pressEnter;
+            pressEnter.setString("PRESS ENTER TO START");
+            pressEnter.setFont(*menuTexts[0].getFont());
+            pressEnter.setCharacterSize(30);
+            pressEnter.setFillColor(Color::White);
+
+            // Center the text
+            pressEnter.setPosition(
+                windowWidth / 2.f - pressEnter.getGlobalBounds().width / 2.f,
+                650
+            );
+
+            // Add a shadow for better visibility
+            Text shadowPressEnter = pressEnter;
+            shadowPressEnter.setFillColor(Color(30, 30, 30, 150));
+            shadowPressEnter.setPosition(pressEnter.getPosition() + Vector2f(2, 2));
+            window.draw(shadowPressEnter);
+            window.draw(pressEnter);
+        }
+    }
+}
+
+void drawUI(RenderWindow& window, const Font& font, int score, int lives, bool superMode, float superModeTimer) {
+    // Draw score at the top
+    Text scoreText("SCORE: " + to_string(score), font, 30);
+    scoreText.setFillColor(Color::White);
+    scoreText.setPosition(10, 930);
+
+    // Drop shadow for better visibility
+    Text shadowScore = scoreText;
+    shadowScore.setFillColor(Color(30, 30, 30, 150));
+    shadowScore.setPosition(scoreText.getPosition() + Vector2f(2, 2));
+    window.draw(shadowScore);
+    window.draw(scoreText);
+
+    // Draw lives
+    Text livesText("LIVES: " + to_string(lives), font, 30);
+    livesText.setFillColor(Color::White);
+    livesText.setPosition(windowWidth - livesText.getGlobalBounds().width - 10, 930);
+
+    // Drop shadow
+    Text shadowLives = livesText;
+    shadowLives.setFillColor(Color(30, 30, 30, 150));
+    shadowLives.setPosition(livesText.getPosition() + Vector2f(2, 2));
+    window.draw(shadowLives);
+    window.draw(livesText);
+
+    // If super mode is active, show timer
+    if (superMode) {
+      
+        int timerSeconds = static_cast<int>(superModeTimer);
+        Text superText("SUPER MODE: " + to_string(timerSeconds), font, 30);
+        superText.setFillColor(Color::Yellow);
+        superText.setPosition(
+            windowWidth / 2.f - superText.getGlobalBounds().width / 2.f,
+            930
+        );
+
+        // Pulsating effect for super mode
+        static float pulseTimer = 0.0f;
+        pulseTimer += 0.1f;
+        float scale = 1.0f + 0.1f * sin(pulseTimer * 5.0f);
+        superText.setScale(scale, scale);
+
+        // Drop shadow
+        Text shadowSuper = superText;
+        shadowSuper.setFillColor(Color(30, 30, 30, 150));
+        shadowSuper.setPosition(superText.getPosition() + Vector2f(2, 2));
+        shadowSuper.setScale(superText.getScale());
+        window.draw(shadowSuper);
+        window.draw(superText);
     }
 }
 
@@ -195,8 +451,22 @@ void MainGame() {
 
     bool inMenu = true;
     bool gameStarted = false;
+    int score = 0;
+    int lives = 3;
+    bool superMode = false;
+    float superModeTimer = 0.0f;
+    const float SUPER_MODE_DURATION = 10.0f; // 10 seconds of super mode
+
+    // Ghost states for super mode
+    vector<bool> ghostsBlinking(4, false);
+    vector<float> ghostBlinkTimers(4, 0.0f);
+    vector<Color> originalGhostColors(4, Color::White);
+    vector<bool> ghostsReturnToSpawn(4, false);
 
     Clock clock;
+
+    // Start menu music
+    playMenuMusic();
 
     while (window.isOpen()) {
         float dt = clock.restart().asSeconds();
@@ -217,8 +487,16 @@ void MainGame() {
                             inMenu = false;
                             gameStarted = true;
 
+                            // Stop menu music when game starts
+                            stopMenuMusic();
+
                             spawnGameGhosts(gameGhosts, maze);
                             cout << "Game ghosts spawned: " << gameGhosts.size() << endl;
+
+                            // Store original ghost colors
+                            for (size_t i = 0; i < gameGhosts.size() && i < originalGhostColors.size(); i++) {
+                                originalGhostColors[i] = gameGhosts[i]->getSprite().getColor();
+                            }
                         }
                         else if (selectedItem == 2) {
                             window.close();
@@ -230,17 +508,46 @@ void MainGame() {
                     if (event.key.code == Keyboard::Down)  pacman.SetDirection(DOWN);
                     if (event.key.code == Keyboard::Left)  pacman.SetDirection(LEFT);
                     if (event.key.code == Keyboard::Right) pacman.SetDirection(RIGHT);
+
+                    // Add debug key for super mode testing
+                    if (event.key.code == Keyboard::S) {
+                        superMode = true;
+                        superModeTimer = SUPER_MODE_DURATION;
+
+                        // Change all ghosts to white
+                        for (auto g : gameGhosts) {
+                            g->setColor(Color::White);
+                        }
+                    }
                 }
             }
         }
 
         window.clear(Color::Black);
-        updateDots(dots);
+
+        // Update background dots
+        updateDots(dots, dt);
 
         if (inMenu) {
-            drawMenu(window, title, menuTexts, selectedItem, menuGhosts, dots, inMenu);
+            drawMenu(window, title, menuTexts, selectedItem, menuGhosts, dots, dt, inMenu);
         }
         else if (gameStarted) {
+            // Update super mode timer
+            if (superMode) {
+                superModeTimer -= dt;
+                if (superModeTimer <= 0) {
+                    superMode = false;
+
+                    // Reset ghost colors when super mode ends
+                    for (size_t i = 0; i < gameGhosts.size() && i < originalGhostColors.size(); i++) {
+                        if (!ghostsBlinking[i] && !ghostsReturnToSpawn[i]) {
+                            gameGhosts[i]->setColor(originalGhostColors[i]);
+                        }
+                    }
+                }
+            }
+
+            // Move Pacman based on current direction and wall collisions
             Vector2f nextPos = pacman.GetPosition();
             float speed = 2.0f;
 
@@ -256,33 +563,142 @@ void MainGame() {
             else if (maze.isWall(pacman.GetPosition()))
                 pacman.Stop(pacman.GetDirection());
 
-            maze.isFood(pacman.GetPosition());
-            maze.isSuperFood(pacman.GetPosition());
+            // Check for food collection
+            if (maze.isFood(pacman.GetPosition())) {
+                score += 10;
+            }
 
+            // Check for super food collection
+            if (maze.isSuperFood(pacman.GetPosition())) {
+                score += 50;
+                superMode = true;
+				pacman.SuperScale();  // Scale up Pacman for super mode
+                superModeTimer = SUPER_MODE_DURATION;
+				playSuperMusic();
+
+                // Change all ghosts to white
+                for (auto g : gameGhosts) {
+                    g->setColor(Color::White);
+                }
+            }
+            if (!superMode) {
+				pacman.ResetScale();  // Reset Pacman scale when not in super mode
+                stopsuperMusic;
+            }
             pacman.Update();
 
+            // Draw maze
             maze.draw(window);
-            window.draw(pacman.getSprite());
-            for (auto g : gameGhosts) {
-                g->updateAutonomous(maze);
-                g->Update(dt);
 
-                if (g->GhostCollision(pacman.GetPosition())) {
-                    cout << "Pacman collided with a ghost!" << endl;
+            // Draw and update ghosts
+            for (size_t i = 0; i < gameGhosts.size() && i < ghostsBlinking.size(); i++) {
+                Ghost* g = gameGhosts[i];
+
+                // Handle blinking ghosts
+                if (ghostsBlinking[i]) {
+                    ghostBlinkTimers[i] += dt;
+
+                    // Blink effect - toggle visibility every 0.2 seconds
+                    if (static_cast<int>(ghostBlinkTimers[i] * 5) % 2 == 0) {
+                        g->setColor(Color::White);
+                    }
+                    else {
+                        g->setColor(Color(255, 255, 255, 50));  // Semi-transparent instead of invisible
+                    }
+
+                    // After 2 seconds of blinking, return to spawn
+                    if (ghostBlinkTimers[i] >= 2.0f) {
+                        ghostsBlinking[i] = false;
+                        ghostsReturnToSpawn[i] = true;
+                        g->setColor(originalGhostColors[i]);  // Restore original color
+
+                        // Set ghost to return to spawn point
+                        Vector2i spawnPos = maze.getGhost('0');  // Use ghost 0's spawn position
+                        g->SetPosition(
+                            spawnPos.x * cellSize + cellSize / 2,
+                            spawnPos.y * cellSize + cellSize / 2
+                        );
+                        ghostsReturnToSpawn[i] = false;
+                    }
                 }
+                // Update ghost movement if not returning to spawn
+                else if (!ghostsReturnToSpawn[i]) {
+                    g->updateAutonomous(maze);
+
+                    // Check for collision with Pacman
+                    if (g->GhostCollision(pacman.GetPosition())) {
+                        if (superMode) {
+                            // In super mode, ghost gets eaten
+                            score += 200;
+                            ghostsBlinking[i] = true;
+                            ghostBlinkTimers[i] = 0.0f;
+                        }
+                        else {
+                            // Normal mode - Pacman loses a life
+                            lives--;
+
+                            if (lives <= 0) {
+                                // Game over logic
+                                cout << "Game Over!" << endl;
+
+                                // Return to menu
+                                inMenu = true;
+                                gameStarted = false;
+
+                                // Reset game state
+                                score = 0;
+                                lives = 3;
+                                superMode = false;
+
+                                // Clean up ghosts
+                                for (auto ghost : gameGhosts) {
+                                    delete ghost;
+                                }
+                                gameGhosts.clear();
+
+                                // Reset maze
+                                maze.reset();
+
+                                // Reset Pacman position
+                                pacman.SetPosition(pacmanStartPos.x, pacmanStartPos.y);
+
+                                // Restart menu music
+                                playMenuMusic();
+
+                                break;  // Exit the ghost loop
+                            }
+                            else {
+                                // Reset Pacman position after losing a life
+                                pacman.SetPosition(pacmanStartPos.x, pacmanStartPos.y);
+                            }
+                        }
+                    }
+                }
+
+                g->Update(dt);
                 window.draw(g->getSprite());
             }
 
+            // Draw Pacman
+            window.draw(pacman.getSprite());
+
+            // Draw UI elements (score, lives, etc.)
+            drawUI(window, font, score, lives, superMode, superModeTimer);
         }
 
         window.display();
     }
 
+    // Clean up
     for (auto g : menuGhosts) delete g;
     for (auto g : gameGhosts) delete g;
+
+    // Stop music if still playing
+    stopMenuMusic();
+	stopsuperMusic();
 }
 
 int main() {
-    MainGame();  // Run the main game loop
+    MainGame();
     return 0;
 }
