@@ -1,3 +1,17 @@
+#include "entity.h"
+#include "animation.h"
+#include "maze.h"
+#include "Ghosts.h"
+#include <SFML/Graphics.hpp>
+#include <string>
+#include <iostream>
+#include <map>
+#include <vector>
+#include <cstdlib>
+#include <ctime>
+#include <cmath>
+
+
 class RingGhost : public Ghost {
 private:
     bool isVisible;

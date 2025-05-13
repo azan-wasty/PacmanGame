@@ -23,7 +23,7 @@ private:
     bool superMode = false;
     Clock superModeClock;
     const float superDuration = 12.f;
-    int totalFood = 0;
+    int totalFood = 146;
 
     const char* mapData[HEIGHT] = {
         " ###################",
@@ -96,7 +96,7 @@ public:
         float remainingTime = superDuration - superModeClock.getElapsedTime().asSeconds();
         return (remainingTime > 0) ? remainingTime : 0.0f;
     }
-	
+
     void reset() {
         map.clear();
         totalFood = 0;
