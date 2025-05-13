@@ -1,6 +1,4 @@
-﻿#pragma once
-
-#include "entity.h"
+﻿#include "entity.h"
 #include "animation.h"
 #include "maze.h"
 #include <SFML/Graphics.hpp>

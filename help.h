@@ -1,528 +1,880 @@
-#pragma once
-#include "entity.h"
-#include "animation.h"
-#include "maze.h" 
 #include <SFML/Graphics.hpp>
-#include <iostream>
-#include <map>
+#include "maze.h"
+#include "pacman.h"
+#include "Ghosts.h"
+#include "SubGhosts.h"
+#include <windows.h>
 #include <vector>
-#include <ctime>    // For time()
-#include <cstdlib>  // For srand() and rand()
-#include <cmath>    // For abs(), round(), floor()
+#include <cstdlib>
+#include <ctime>
+#include <map>
+#include <string>
+#include <algorithm>
+#include <random>
+#include <iostream>
+#include <SFML/Audio.hpp>
+#include <SFML/System.hpp>
+#include <thread>
+using namespace std;
+using namespace sf;
 
-class Ghost : public Entity {
-private:
-    sf::Texture texture;
-    Animation animation;
-    Direction currentDirection;
-    sf::Vector2f initialPosition;
-    int frameWidth, frameHeight;
-    int currentFrameIndex;
-    std::map<int, sf::IntRect> frameMap;
-    bool inSuperMode;
-    float superModeTimer;
-    const float SUPER_MODE_DURATION = 5.0f; // 5 seconds of super mode
-    bool isVisible;
-    float stuckTimer; // Timer to detect when ghost is stuck
-    bool inSpawnBox; // Flag to track if ghost is in spawn box
-    float waitTimer; // Timer for waiting before initial movement
+const int windowWidth = 960;
+const int windowHeight = 1050;
 
-    // New behavior variables from second implementation
-    float behaviorTimer;     // Timer for ghost behaviors
-    bool isScattered;        // For alternating between scatter and random movement
-    float scatterTimer;      // For timing scatter/random phases
-    const float SCATTER_DURATION = 7.0f;  // Seconds in scatter mode
+// Ghost types and their descriptions
+struct GhostInfo {
+    string name;
+    string description;
+};
 
-    // Constants for cell-based movement
-    static const int CELL_SIZE = 40;
+map<string, GhostInfo> ghostInfoMap = {
+    {"TELEPORTER", {"TELEPORTER", "Teleports to random locations throughout the maze"}},
+    {"RANDOMGHOST", {"RANDOM", "Moves randomly through the maze"}},
+    {"CHASER", {"CHASER", "Aggressively follows Pacman at all times"}},
+    {"AMBUSHER", {"AMBUSHER", "Stops at junctions to ambush Pacman"}},
+    {"HERMES", {"HERMES", "Much faster than other ghosts"}},
+    {"PHANTOM", {"PHANTOM", "Has an extended hit radius to catch Pacman"}},
+    {"TIMESTOP", {"TIME STOP", "Can temporarily freeze Pacman"}},
+    {"RINGGHOST", {"RING", "Can become invisible but still dangerous"}}
+};
 
-public:
-    // Updated constructor to accept a map of frame indexes for each direction
-    Ghost(const std::string& spriteSheetPath,
-        int frameCount, int frameWidth, int frameHeight,
-        float x, float y, float speed, float scale,
-        const std::map<Direction, int>& frameIndexes)
-        : Entity(x, y, speed),
-        animation(0.1f),
-        currentDirection(RIGHT), // Start with RIGHT direction to ensure visibility
-        initialPosition(x, y),
-        frameWidth(frameWidth),
-        frameHeight(frameHeight),
-        currentFrameIndex(1),
-        inSuperMode(false),
-        superModeTimer(0.0f),
-        isVisible(true),
-        stuckTimer(0.0f),
-        inSpawnBox(true),
-        waitTimer((rand() % 3) + 0.5f), // Random initial wait time between 0.5 and 3.5 seconds
-        behaviorTimer(0.0f),
-        isScattered(true),
-        scatterTimer(0.0f)
-    {
-        // Seed the random number generator
-        static bool seeded = false;
-        if (!seeded) {
-            srand(static_cast<unsigned int>(time(nullptr)));
-            seeded = true;
-        }
+vector<string> ghostNames = {
+    "TELEPORTER", "RANDOMGHOST", "CHASER", "AMBUSHER",
+    "HERMES", "PHANTOM", "TIMESTOP", "RINGGHOST"
+};
 
-        if (!texture.loadFromFile(spriteSheetPath)) {
-            std::cerr << "Failed to load ghost texture: " << spriteSheetPath << std::endl;
-        }
+struct Dot {
+    CircleShape shape;
+    float speed;
+    float angle;  // For circular motion
+    float radius; // For circular motion
+    Vector2f center; // Center point for circular motion
+    float oscillation; // For pulsing
+    bool isPulsing; // Whether this dot pulses
+};
 
-        sprite.setTexture(texture);
-        sprite.setScale(scale, scale);
-
-        // Center the sprite on its position
-        sprite.setOrigin(frameWidth / 2.0f, frameHeight / 2.0f);
-        sprite.setPosition(position);
-
-        // Add frames per direction based on the passed frameIndexes
-        for (const auto& pair : frameIndexes) {
-            Direction dir = pair.first;
-            int frameIndex = pair.second;
-
-            // Add the frame for the specified direction and frame index
-            animation.addDirectionalFrame(
-                dir,
-                sf::IntRect(frameIndex * frameWidth, 0, frameWidth, frameHeight)
-            );
-        }
-
-        // Set the initial texture rect
-        sprite.setTextureRect(sf::IntRect(0, 0, frameWidth, frameHeight));
-
-        // Create frame map for all frames in the spritesheet
-        createFrameMap(frameCount);
-
-        // Set initial frame to frame 1
-        setFrame(1);
+// Global music object (declared outside to avoid scope issues)
+sf::Music menuMusic;
+sf::Music superMusic;
+void playMenuMusic() {
+    // Load the music file
+    if (!menuMusic.openFromFile("pm.ogg")) {
+        std::cerr << "Error: Could not load pm.ogg\n";
+        return;
     }
 
-    // Create a map of all frames from the spritesheet
-    void createFrameMap(int frameCount) {
-        for (int i = 0; i < frameCount; ++i) {
-            // For each frame, create an IntRect for its position on the spritesheet
-            frameMap[i] = sf::IntRect(
-                i * frameWidth,    // X position
-                0,                 // Y position (all frames are on the first row)
-                frameWidth,        // Width
-                frameHeight        // Height
-            );
-        }
+    // Set up the music properties
+    menuMusic.setLoop(true);   // Ensure it loops
+    menuMusic.setVolume(50);   // Adjust volume (0-100)
+
+    // Play the music
+    menuMusic.play();
+}
+
+void playSuperMusic() {
+    // Load the music file
+    if (!superMusic.openFromFile("ssj3.wav")) {
+        std::cerr << "Error: Could not load ssj3.wav\n";
+        return;
     }
 
-    // Set specific frame for the ghost
-    void setFrame(int frameIndex) {
-        if (frameMap.find(frameIndex) != frameMap.end()) {
-            currentFrameIndex = frameIndex;
-            sprite.setTextureRect(frameMap[frameIndex]);
-        }
+    // Set up the music properties
+    menuMusic.setVolume(75);   // Adjust volume (0-100)
+
+    // Play the music
+    superMusic.play();
+}
+
+void stopMenuMusic() {
+    if (menuMusic.getStatus() == sf::Music::Playing) {
+        menuMusic.stop();
     }
+}
 
-    // Set position directly (needed for menu ghosts)
-    void SetPosition(float x, float y) {
-        position.x = x;
-        position.y = y;
-        sprite.setPosition(position);
+void stopsuperMusic() {
+    if (superMusic.getStatus() == sf::Music::Playing) {
+        superMusic.stop();
     }
+}
 
-    bool isStuck(const Vector2f& oldPosition) {
-        // Check if the ghost hasn't moved significantly
-        return (fabs(position.x - oldPosition.x) < 1.0f &&
-            fabs(position.y - oldPosition.y) < 1.0f);
-    }
+void generateBackgroundDots(vector<Dot>& dots) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> angleDist(0.0f, 2.0f * 3.14159f);
+    std::uniform_real_distribution<float> radiusDist(100.0f, 350.0f);
+    std::uniform_real_distribution<float> speedDist(0.5f, 2.5f);
+    std::uniform_real_distribution<float> oscDist(0.0f, 2.0f * 3.14159f);
+    std::bernoulli_distribution isPulsingDist(0.3f); // 30% chance for pulsing dots
 
-    void tryEscapeSpawnBox(Maze& maze) {
-        // Try moving upward to escape the spawn box
-        Vector2f tempPosition = position;
-        tempPosition.y -= speed * 2.0f; // Try moving up with extra speed
+    // Create standard moving dots
+    for (int i = 0; i < 50; ++i) {
+        CircleShape dot(2 + static_cast<float>(rand() % 3)); // Varied sizes
 
-        FloatRect futureBounds = sprite.getGlobalBounds();
-        futureBounds.left = tempPosition.x - (futureBounds.width / 2);
-        futureBounds.top = tempPosition.y - (futureBounds.height / 2);
-
-        Vector2f center = {
-            tempPosition.x,
-            tempPosition.y
-        };
-
-        if (maze.isWalkable(center)) {
-            position = tempPosition;
-            sprite.setPosition(position);
-            inSpawnBox = false;
+        // Random vibrant colors for some dots
+        if (rand() % 5 == 0) { // 20% chance for colored dots
+            dot.setFillColor(Color(rand() % 255, rand() % 255, rand() % 255, 150 + rand() % 100));
         }
         else {
-            // If up doesn't work, try other directions with higher speed
-            Direction directions[4] = { UP, LEFT, RIGHT, DOWN };
-            for (int i = 0; i < 4; i++) {
-                tempPosition = position;
-                switch (directions[i]) {
-                case UP:    tempPosition.y -= speed * 2.0f; break;
-                case DOWN:  tempPosition.y += speed * 2.0f; break;
-                case LEFT:  tempPosition.x -= speed * 2.0f; break;
-                case RIGHT: tempPosition.x += speed * 2.0f; break;
-                }
+            dot.setFillColor(Color(200, 200, 200, 150 + rand() % 100)); // White/gray with alpha
+        }
 
-                center = {
-                    tempPosition.x,
-                    tempPosition.y
-                };
+        dot.setPosition(rand() % windowWidth, rand() % windowHeight);
+        float speed = speedDist(gen);
+        dots.push_back({ dot, speed, 0, 0, {0, 0}, 0, false });
+    }
 
-                if (maze.isWalkable(center)) {
-                    position = tempPosition;
-                    sprite.setPosition(position);
-                    currentDirection = directions[i];
-                    inSpawnBox = false;
-                    break;
+    // Create orbital dots
+    for (int i = 0; i < 30; ++i) {
+        CircleShape dot(1 + static_cast<float>(rand() % 2));
+        dot.setFillColor(Color::Yellow);
+
+        Vector2f center(windowWidth / 2.0f, 300.0f);
+        float radius = radiusDist(gen);
+        float angle = angleDist(gen);
+        float speed = speedDist(gen) * 0.5f;
+
+        // Calculate position based on center, radius and angle
+        float x = center.x + radius * cos(angle);
+        float y = center.y + radius * sin(angle);
+        dot.setPosition(x, y);
+
+        bool isPulsing = isPulsingDist(gen);
+        float oscillation = oscDist(gen);
+
+        dots.push_back({ dot, speed, angle, radius, center, oscillation, isPulsing });
+    }
+}
+
+vector<Ghost*> createMenuGhosts() {
+    random_device rd;
+    mt19937 gen(rd());
+    shuffle(ghostNames.begin(), ghostNames.end(), gen);
+    vector<Ghost*> ghosts;
+    // Ensure that ghostNames contains at least 4 elements.
+    if (ghostNames.size() < 4) {
+        cerr << "Not enough ghost names to create menu ghosts!" << endl;
+        return ghosts;  // Return empty vector if there aren't enough names.
+    }
+    // Create ghosts with different starting positions and speeds
+    for (float i = 0; i < 4; ++i) {
+        string ghostName = ghostNames[i];
+        string spriteSheetPath = "sprites/" + ghostName + ".png";
+        map<Direction, int> frameIndexes = {
+            {RIGHT, 0}, {UP, 1}, {DOWN, 2}, {LEFT, 3}
+        };
+
+        // Stagger initial positions for a "chase" effect
+        float x = -120.0f - (i * 150.0f);
+        float y = 640.0f + fmod(i * 30.0f, 80.0f);  // Vary vertical positions slightly
+        // Vary speeds slightly for more dynamic movement
+        float ghostSpeed = 2.0f + (i * 0.5f);
+        Ghost* g = new Ghost(spriteSheetPath, 4, 50, 50, x, y, ghostSpeed, 5.0f, frameIndexes);
+        ghosts.push_back(g);
+    }
+    return ghosts;
+}
+
+void updateDots(vector<Dot>& dots, float dt) {
+    for (auto& d : dots) {
+        if (d.radius > 0) {
+            // This is an orbital dot
+            d.angle += d.speed * dt;
+
+            // Calculate new position based on center, radius and updated angle
+            float x = d.center.x + d.radius * cos(d.angle);
+            float y = d.center.y + d.radius * sin(d.angle);
+
+            d.shape.setPosition(x, y);
+
+            // Handle pulsing effect
+            if (d.isPulsing) {
+                d.oscillation += dt * 3.0f;
+                float scale = 0.7f + 0.3f * sin(d.oscillation);
+                float currentRadius = d.shape.getRadius();
+                d.shape.setRadius(currentRadius * scale);
+
+                // Adjust color based on oscillation
+                float brightness = 150 + 105 * sin(d.oscillation);
+                d.shape.setFillColor(Color(255, 255, brightness, 200));
+            }
+        }
+        else {
+            // This is a standard moving dot
+            Vector2f pos = d.shape.getPosition();
+            pos.y += d.speed;
+            if (pos.y > windowHeight) pos.y = 0;
+            d.shape.setPosition(pos);
+        }
+    }
+}
+
+// Function to randomly select ghosts for the game
+vector<string> selectRandomGhosts(int count) {
+    vector<string> selectedGhosts = ghostNames;
+    random_device rd;
+    mt19937 gen(rd());
+    shuffle(selectedGhosts.begin(), selectedGhosts.end(), gen);
+
+    // Return the first 'count' elements
+    if (selectedGhosts.size() > count) {
+        selectedGhosts.resize(count);
+    }
+
+    return selectedGhosts;
+}
+
+// Create ghosts for the game using the factory function from Ghosts.cpp
+vector<Ghost*> spawnGameGhosts(const vector<string>& selectedGhostTypes, const Maze& maze, Pacman p) {
+    vector<Ghost*> gameGhosts;
+
+    for (int i = 0; i < selectedGhostTypes.size() && i < 4; ++i) {
+        string ghostType = selectedGhostTypes[i];
+        string spriteSheetPath = "sprites/" + ghostType + ".png";
+
+        Vector2i ghostPos = maze.getGhost(i + '0');
+
+        if (ghostPos.x == -1 || ghostPos.y == -1) continue;
+
+        static const int TILE_SIZE = 40;
+        float x = ghostPos.x * TILE_SIZE;
+        float y = ghostPos.y * TILE_SIZE;
+
+        // Use the factory function to create the specific ghost type
+        Ghost* g = createSpecialGhost(ghostType, spriteSheetPath,
+            x + TILE_SIZE / 2,
+            y + TILE_SIZE / 2,
+            2.5f, p);
+
+        gameGhosts.push_back(g);
+    }
+
+    return gameGhosts;
+}
+
+// Function to display ghost abilities before game starts
+void displayGhostAbilities(RenderWindow& window, const Font& font, const vector<string>& selectedGhosts,
+    vector<Dot>& backgroundDots, float dt) {
+    Clock displayClock;
+    float displayTime = 0.0f;
+    const float DISPLAY_DURATION = 5.0f; // Show for 5 seconds
+
+    // Create background with dots
+    while (displayTime < DISPLAY_DURATION && window.isOpen()) {
+        displayTime = displayClock.getElapsedTime().asSeconds();
+
+        Event event;
+        while (window.pollEvent(event)) {
+            if (event.type == Event::Closed)
+                window.close();
+            if (event.type == Event::KeyPressed) {
+                if (event.key.code == Keyboard::Return || event.key.code == Keyboard::Space) {
+                    // Allow skipping with Enter or Space
+                    return;
                 }
             }
         }
-    }
 
-    // Check if the ghost is at the center of a cell (for decision making at intersections)
-    bool isAtCenterOfCell() const {
-        // Allow small tolerance for floating point positions
-        float tolerance = 2.0f;
-        float centerX = std::round(position.x / CELL_SIZE) * CELL_SIZE + (CELL_SIZE / 2);
-        float centerY = std::round(position.y / CELL_SIZE) * CELL_SIZE + (CELL_SIZE / 2);
+        window.clear(Color(0, 0, 30)); // Dark blue background
 
-        return std::abs(position.x - centerX) < tolerance &&
-            std::abs(position.y - centerY) < tolerance;
-    }
+        // Update background dots
+        updateDots(backgroundDots, dt);
+        for (auto& d : backgroundDots)
+            window.draw(d.shape);
 
-    // Get available directions excluding the opposite of current direction
-    std::vector<Direction> getAvailableDirections(Maze& maze) {
-        std::vector<Direction> dirs;
-        Vector2f testPos;
+        // Draw title
+        Text title("BEWARE OF THESE GHOSTS!", font, 48);
+        title.setFillColor(Color::Yellow);
+        title.setPosition(windowWidth / 2.f - title.getGlobalBounds().width / 2.f, 120);
+        window.draw(title);
 
-        // Try each direction, excluding the opposite of current direction
-        for (int d = 0; d < 4; ++d) {
-            Direction dir = static_cast<Direction>(d);
+        // Draw ghost information
+        for (int i = 0; i < selectedGhosts.size() && i < 4; ++i) {
+            string ghostType = selectedGhosts[i];
 
-            // Skip the opposite direction (no backtracking)
-            if (dir == getOpposite(currentDirection)) {
-                continue;
+            // Create ghost sprite preview
+            Sprite ghostSprite;
+            Texture ghostTexture;
+            if (ghostTexture.loadFromFile("sprites/" + ghostType + ".png")) {
+                ghostSprite.setTexture(ghostTexture);
+                ghostSprite.setTextureRect(IntRect(0, 0, 50, 50)); // First frame
+                ghostSprite.setScale(2.0f, 2.0f);
+                ghostSprite.setPosition(160, 220 + i * 120);
+                window.draw(ghostSprite);
             }
 
-            if (isValidDirection(maze, dir)) {
-                dirs.push_back(dir);
+            // Ghost name
+            Text nameText(ghostInfoMap[ghostType].name, font, 36);
+            nameText.setFillColor(Color::White);
+            nameText.setPosition(250, 210 + i * 120);
+            window.draw(nameText);
+
+            // Ghost description
+            Text descText(ghostInfoMap[ghostType].description, font, 24);
+            descText.setFillColor(Color(200, 200, 200));
+            descText.setPosition(250, 250 + i * 120);
+            window.draw(descText);
+        }
+
+        // Skip instruction
+        Text skipText("PRESS ENTER OR SPACE TO CONTINUE", font, 24);
+        skipText.setFillColor(Color(150, 150, 150));
+        skipText.setPosition(windowWidth / 2.f - skipText.getGlobalBounds().width / 2.f,
+            windowHeight - 100);
+
+        // Make the text blink
+        if (static_cast<int>(displayTime * 2) % 2 == 0) {
+            window.draw(skipText);
+        }
+
+        window.display();
+    }
+}
+
+void drawMenu(RenderWindow& window, Text& title, vector<Text>& menuTexts, int selectedItem,
+    vector<Ghost*>& menuGhosts, vector<Dot>& dots, float dt, bool inMenu) {
+
+    // Draw background
+    for (auto& d : dots)
+        window.draw(d.shape);
+
+    // Create a pulsing effect for the title
+    static float titlePulseTimer = 0.0f;
+    titlePulseTimer += dt;
+    float titleScale = 1.0f + 0.05f * sin(titlePulseTimer * 3.0f);
+    title.setScale(titleScale, titleScale);
+
+    // Smoothly change title color
+    int r = 255;  // Keep red at max for yellow
+    int g = 255;  // Keep green at max for yellow
+    int b = static_cast<int>(60 + 40 * sin(titlePulseTimer * 2.0f));  // Subtle blue pulsing
+    title.setFillColor(Color(r, g, b));
+
+    // Draw title with drop shadow for better visibility
+    Text shadowTitle = title;
+    shadowTitle.setFillColor(Color(30, 30, 30, 150));
+    shadowTitle.setPosition(title.getPosition() + Vector2f(3, 3));
+    window.draw(shadowTitle);
+    window.draw(title);
+
+    // Draw menu options with hover effect
+    for (size_t i = 0; i < menuTexts.size(); ++i) {
+        // Set the base color
+        Color baseColor = (i == selectedItem) ? Color::Yellow : Color::White;
+
+        // Add pulsing effect to selected item
+        if (i == selectedItem) {
+            float pulseValue = 0.7f + 0.3f * sin(titlePulseTimer * 5.0f);
+            baseColor = Color(
+                static_cast<Uint8>(255 * pulseValue),
+                static_cast<Uint8>(255 * pulseValue),
+                static_cast<Uint8>(50)
+            );
+
+            // Make selected item larger
+            menuTexts[i].setScale(1.1f, 1.1f);
+
+            // Add an arrow cursor - FIX: Use two separate characters ">>" instead of a string literal
+            Text arrow;
+            arrow.setString(">");  // Single character
+            arrow.setFont(*menuTexts[i].getFont());
+            arrow.setCharacterSize(40);
+            arrow.setFillColor(baseColor);
+
+            // Position the first arrow
+            arrow.setPosition(
+                menuTexts[i].getPosition().x - arrow.getGlobalBounds().width - 15,
+                menuTexts[i].getPosition().y
+            );
+            window.draw(arrow);
+
+            // Position the second arrow
+            arrow.setPosition(
+                menuTexts[i].getPosition().x - arrow.getGlobalBounds().width * 2 - 10,
+                menuTexts[i].getPosition().y
+            );
+            window.draw(arrow);
+        }
+        else {
+            menuTexts[i].setScale(1.0f, 1.0f);
+        }
+
+        menuTexts[i].setFillColor(baseColor);
+
+        // Draw shadow for better visibility
+        Text shadowText = menuTexts[i];
+        shadowText.setFillColor(Color(30, 30, 30, 150));
+        shadowText.setPosition(menuTexts[i].getPosition() + Vector2f(2, 2));
+        shadowText.setScale(menuTexts[i].getScale());
+        window.draw(shadowText);
+
+        window.draw(menuTexts[i]);
+    }
+
+    if (inMenu) {
+        // Move and draw the menu ghosts
+        for (int i = 0; i < static_cast<int>(menuGhosts.size()); ++i) {
+            Ghost* g = menuGhosts[i];
+
+            // Move the ghost in the RIGHT direction
+            g->menMove(RIGHT);
+
+            // Update ghost's movement
+            g->Update(dt);
+
+            if (g->GetPosition().x > windowWidth) {
+                // Calculate new x-coordinate based on ghost index
+                float newX = -190.f - (rand() % 100);  // Add some randomness
+                float newY = 640.f + (rand() % 80);    // Vary vertical position too
+                g->SetPosition(newX, newY);
             }
+
+            window.draw(g->getSprite());
         }
 
-        // If no directions are valid (i.e., dead-end), go back
-        if (dirs.empty()) {
-            dirs.push_back(getOpposite(currentDirection));
-        }
+        // Draw "Press Enter to Start" flashing text - FIX: Use a more appropriate format
+        static float flashTimer = 0.0f;
+        flashTimer += dt;
+        if (sin(flashTimer * 3.0f) > 0) {  // Flash at 3Hz
+            Text pressEnter;
+            pressEnter.setString("PRESS ENTER TO START");
+            pressEnter.setFont(*menuTexts[0].getFont());
+            pressEnter.setCharacterSize(30);
+            pressEnter.setFillColor(Color::White);
 
-        return dirs;
-    }
+            // Center the text
+            pressEnter.setPosition(
+                windowWidth / 2.f - pressEnter.getGlobalBounds().width / 2.f,
+                650
+            );
 
-    // Check if the ghost can move in the specified direction
-    bool isValidDirection(Maze& maze, Direction dir) {
-        Vector2f testPos = position;
-
-        // Check where the ghost would be after moving
-        switch (dir) {
-        case RIGHT: testPos.x += speed; break;
-        case LEFT:  testPos.x -= speed; break;
-        case UP:    testPos.y -= speed; break;
-        case DOWN:  testPos.y += speed; break;
-        }
-
-        // Return if this position is walkable
-        return maze.isWalkable(testPos);
-    }
-
-    // Get the opposite direction
-    Direction getOpposite(Direction dir) const {
-        switch (dir) {
-        case UP:    return DOWN;
-        case DOWN:  return UP;
-        case LEFT:  return RIGHT;
-        case RIGHT: return LEFT;
-        default:    return LEFT;
+            // Add a shadow for better visibility
+            Text shadowPressEnter = pressEnter;
+            shadowPressEnter.setFillColor(Color(30, 30, 30, 150));
+            shadowPressEnter.setPosition(pressEnter.getPosition() + Vector2f(2, 2));
+            window.draw(shadowPressEnter);
+            window.draw(pressEnter);
         }
     }
+}
 
-    // New move function integrating cell-based movement from second implementation
-    bool Move(Direction dir, Maze& maze) {
-        // If ghost is in spawn box and wait timer is still active
-        if (inSpawnBox && waitTimer > 0) {
-            waitTimer -= 1.0f / 60.0f; // Decrement wait timer
-            return false; // Don't move yet
-        }
+void drawUI(RenderWindow& window, const Font& font, int score, int lives, bool superMode, float superModeTimer) {
+    // Draw score at the top
+    Text scoreText("SCORE: " + to_string(score), font, 30);
+    scoreText.setFillColor(Color::White);
+    scoreText.setPosition(10, 930);
 
-        // If ghost is in spawn box and wait timer is done
-        if (inSpawnBox) {
-            tryEscapeSpawnBox(maze);
-            return true;
-        }
+    // Drop shadow for better visibility
+    Text shadowScore = scoreText;
+    shadowScore.setFillColor(Color(30, 30, 30, 150));
+    shadowScore.setPosition(scoreText.getPosition() + Vector2f(2, 2));
+    window.draw(shadowScore);
+    window.draw(scoreText);
 
-        Vector2f tempPosition = position;
-        float moveDist = speed;
+    // Draw lives
+    Text livesText("LIVES: " + to_string(lives), font, 30);
+    livesText.setFillColor(Color::White);
+    livesText.setPosition(windowWidth - livesText.getGlobalBounds().width - 10, 930);
 
-        switch (dir) {
-        case RIGHT: tempPosition.x += moveDist; break;
-        case LEFT:  tempPosition.x -= moveDist; break;
-        case UP:    tempPosition.y -= moveDist; break;
-        case DOWN:  tempPosition.y += moveDist; break;
-        }
+    // Drop shadow
+    Text shadowLives = livesText;
+    shadowLives.setFillColor(Color(30, 30, 30, 150));
+    shadowLives.setPosition(livesText.getPosition() + Vector2f(2, 2));
+    window.draw(shadowLives);
+    window.draw(livesText);
 
-        if (isValidDirection(maze, dir)) {
-            position = tempPosition;
-            currentDirection = dir;
-            sprite.setPosition(position);
+    // If super mode is active, show timer
+    if (superMode) {
+        int timerSeconds = static_cast<int>(superModeTimer);
+        Text superText("SUPER MODE: " + to_string(timerSeconds), font, 30);
+        superText.setFillColor(Color::Yellow);
+        superText.setPosition(
+            windowWidth / 2.f - superText.getGlobalBounds().width / 2.f,
+            930
+        );
 
-            // Update the animation frame for the current direction
-            animation.update(1.0f / 60.0f, currentDirection, sprite);
+        // Pulsating effect for super mode
+        static float pulseTimer = 0.0f;
+        pulseTimer += 0.1f;
+        float scale = 1.0f + 0.1f * sin(pulseTimer * 5.0f);
+        superText.setScale(scale, scale);
 
-            return true;  // Move succeeded
-        }
+        // Drop shadow
+        Text shadowSuper = superText;
+        shadowSuper.setFillColor(Color(30, 30, 30, 150));
+        shadowSuper.setPosition(superText.getPosition() + Vector2f(2, 2));
+        shadowSuper.setScale(superText.getScale());
+        window.draw(shadowSuper);
+        window.draw(superText);
+    }
+}
 
-        return false;  // Blocked by wall
+void MainGame() {
+    RenderWindow window(VideoMode(windowWidth, windowHeight), "Pac-Man");
+    window.setFramerateLimit(60);
+
+    Font font;
+    if (!font.loadFromFile("ArcadeClassic.ttf")) {
+        cerr << "Error: Could not load font ArcadeClassic.ttf" << endl;
+        return;
     }
 
-    // Autonomous movement integrating behavior patterns from the second implementation
-    void updateAutonomous(Maze& maze, const sf::Vector2f& pacmanPosition) {
-        float deltaTime = 1.0f / 60.0f;
+    Text title("PAC-MAN", font, 80);
+    title.setFillColor(Color::Yellow);
+    title.setPosition(windowWidth / 2.f - title.getGlobalBounds().width / 2.f, 200);
 
-        // Update behavior timers
-        scatterTimer += deltaTime;
-        behaviorTimer += deltaTime;
+    vector<string> menuItems = { "Start Game", "Options", "Exit" };
+    vector<Text> menuTexts;
+    int selectedItem = 0;
 
-        // Toggle between scatter and chase modes every SCATTER_DURATION seconds
-        if (scatterTimer >= SCATTER_DURATION) {
-            isScattered = !isScattered;
-            scatterTimer = 0.0f;
-        }
+    for (size_t i = 0; i < menuItems.size(); ++i) {
+        Text item(menuItems[i], font, 40);
+        item.setFillColor(Color::White);
+        item.setPosition(windowWidth / 2.f - item.getGlobalBounds().width / 2.f, 320 + i * 90);
+        menuTexts.push_back(item);
+    }
 
-        // Only change direction at cell centers or when blocked
-        if (isAtCenterOfCell() || !Move(currentDirection, maze)) {
-            // Get available directions (excludes opposite direction to prevent 180° turns)
-            std::vector<Direction> availableDirs = getAvailableDirections(maze);
+    vector<Dot> dots;
+    generateBackgroundDots(dots);
 
-            if (!availableDirs.empty()) {
-                if (isScattered) {
-                    // In scatter mode: pick a random valid direction
-                    currentDirection = availableDirs[rand() % availableDirs.size()];
-                }
-                else {
-                    // In chase mode: find the direction closest to Pacman
-                    Direction bestDir = currentDirection;
-                    float minDistance = 999999.0f;
+    Maze maze;
+    Vector2i pacmanCell = maze.getP();
+    Vector2f offset = maze.getOffset();
+    float cellSize = Maze::getCellSize();
+    Vector2f pacmanStartPos(pacmanCell.x * cellSize + offset.x, pacmanCell.y * cellSize + offset.y);
 
-                    for (Direction dir : availableDirs) {
-                        // Calculate where ghost would be after moving in this direction
-                        Vector2f newPos = position;
-                        switch (dir) {
-                        case RIGHT: newPos.x += CELL_SIZE; break;
-                        case LEFT:  newPos.x -= CELL_SIZE; break;
-                        case UP:    newPos.y -= CELL_SIZE; break;
-                        case DOWN:  newPos.y += CELL_SIZE; break;
+    map<Direction, string> pacPaths = {
+        { UP, "sprites/PACMANUP.png" },
+        { DOWN, "sprites/PACMANDOWN.png" },
+        { LEFT, "sprites/PACMANLEFT.png" },
+        { RIGHT, "sprites/PACMANRIGHT.png" }
+    };
+
+
+    Pacman pacman(pacPaths, 4, 50, 50, pacmanStartPos.x, pacmanStartPos.y, 2.5f);
+
+    vector<Ghost*> menuGhosts = createMenuGhosts();
+    vector<Ghost*> gameGhosts;
+    vector<string> selectedGhostTypes;
+
+    bool inMenu = true;
+    bool gameStarted = false; 
+    bool showingGhostInfo = false;
+    int score = 0;
+    int lives = 3;
+    bool superMode = false;
+    float superModeTimer = 0.0f;
+    const float SUPER_MODE_DURATION = 12.0f; // 10 seconds of super mode
+
+    // Ghost states for super mode
+    vector<bool> ghostsBlinking(4, false);
+    vector<float> ghostBlinkTimers(4, 0.0f);
+    vector<Color> originalGhostColors(4, Color::White);
+    vector<bool> ghostsReturnToSpawn(4, false);
+
+    Clock clock;
+
+    // Start menu music
+    playMenuMusic();
+
+    while (window.isOpen()) {
+        float dt = clock.restart().asSeconds();
+
+        Event event;
+        while (window.pollEvent(event)) {
+            if (event.type == Event::Closed)
+                window.close();
+
+            if (event.type == Event::KeyPressed) {
+                if (inMenu) {
+                    if (event.key.code == Keyboard::Up)
+                        selectedItem = (selectedItem - 1 + menuItems.size()) % menuItems.size();
+                    else if (event.key.code == Keyboard::Down)
+                        selectedItem = (selectedItem + 1) % menuItems.size();
+                    else if (event.key.code == Keyboard::Enter || event.key.code == Keyboard::Return) {
+                        if (selectedItem == 0) {
+                            inMenu = false;
+                            showingGhostInfo = true;
+
+                            // Select random ghosts for this game
+                            selectedGhostTypes = selectRandomGhosts(4);
+
+                            // Stop menu music
+                            stopMenuMusic();
                         }
-
-                        // Calculate distance to Pacman from this new position
-                        float dx = newPos.x - pacmanPosition.x;
-                        float dy = newPos.y - pacmanPosition.y;
-                        float distance = dx * dx + dy * dy; // Square distance (no need for sqrt)
-
-                        if (distance < minDistance) {
-                            minDistance = distance;
-                            bestDir = dir;
+                        else if (selectedItem == 2) {
+                            window.close();
                         }
                     }
+                }
+                else if (showingGhostInfo) {
+                    if (event.key.code == Keyboard::Enter || event.key.code == Keyboard::Return ||
+                        event.key.code == Keyboard::Space) {
+                        // Skip ghost info screen
+                        showingGhostInfo = false;
+                        gameStarted = true;
 
-                    currentDirection = bestDir;
+                        // Create the game ghosts based on selected types
+                        gameGhosts = spawnGameGhosts(selectedGhostTypes, maze, pacman);
+                        cout << "Game ghosts spawned: " << gameGhosts.size() << endl;
+
+                        // Store original ghost colors
+                        originalGhostColors.resize(gameGhosts.size());
+                        ghostsBlinking.resize(gameGhosts.size(), false);
+                        ghostBlinkTimers.resize(gameGhosts.size(), 0.0f);
+                        ghostsReturnToSpawn.resize(gameGhosts.size(), false);
+
+                        for (size_t i = 0; i < gameGhosts.size(); i++) {
+                            originalGhostColors[i] = gameGhosts[i]->getSprite().getColor();
+                        }
+                    }
+                }
+                else if (gameStarted) {
+                    if (event.key.code == Keyboard::Up)    pacman.SetDirection(UP);
+                    if (event.key.code == Keyboard::Down)  pacman.SetDirection(DOWN);
+                    if (event.key.code == Keyboard::Left)  pacman.SetDirection(LEFT);
+                    if (event.key.code == Keyboard::Right) pacman.SetDirection(RIGHT);
+
+                    // Add debug key for super mode testing
+                    if (event.key.code == Keyboard::S) {
+                        superMode = true;
+                        superModeTimer = SUPER_MODE_DURATION;
+                        playSuperMusic();
+
+                        // Change all ghosts to white
+                        for (auto g : gameGhosts) {
+                            g->setColor(Color::White);
+                        }
+                    }
+                }
+            }
+        }
+
+        window.clear(Color::Black);
+
+        // Update background dots
+        updateDots(dots, dt);
+
+        if (inMenu) {
+            drawMenu(window, title, menuTexts, selectedItem, menuGhosts, dots, dt, inMenu);
+        }
+        else if (showingGhostInfo) {
+            // Display ghost abilities screen
+            displayGhostAbilities(window, font, selectedGhostTypes, dots, dt);
+            showingGhostInfo = false;
+            gameStarted = true;
+
+            // Create the game ghosts
+            gameGhosts = spawnGameGhosts(selectedGhostTypes, maze, pacman);
+            cout << "Game ghosts spawned: " << gameGhosts.size() << endl;
+
+            // Store original ghost colors
+            originalGhostColors.resize(gameGhosts.size());
+            ghostsBlinking.resize(gameGhosts.size(), false);
+            ghostBlinkTimers.resize(gameGhosts.size(), 0.0f);
+            ghostsReturnToSpawn.resize(gameGhosts.size(), false);
+
+            for (size_t i = 0; i < gameGhosts.size(); i++) {
+                originalGhostColors[i] = gameGhosts[i]->getSprite().getColor();
+            }
+        }
+        else if (gameStarted) {
+            // Update super mode timer
+            if (superMode) {
+                superModeTimer -= dt;
+                if (superModeTimer <= 0) {
+                    superMode = false;
+                    stopsuperMusic();
+
+                    // Reset ghost colors when super mode ends
+                    for (size_t i = 0; i < gameGhosts.size() && i < originalGhostColors.size(); i++) {
+                        if (!ghostsBlinking[i] && !ghostsReturnToSpawn[i]) {
+                            gameGhosts[i]->setColor(originalGhostColors[i]);
+                        }
+                    }
+                }
+            }
+
+            // Move Pacman based on current direction and wall collisions
+            Vector2f nextPos = pacman.GetPosition();
+            float speed = 2.0f;
+
+            switch (pacman.GetDirection()) {
+            case UP:    nextPos.y -= speed; break;
+            case DOWN:  nextPos.y += speed; break;
+            case LEFT:  nextPos.x -= speed; break;
+            case RIGHT: nextPos.x += speed; break;
+            }
+
+            if (maze.isWalkable(nextPos))
+                pacman.Move(pacman.GetDirection(), maze);
+            else if (maze.isWall(pacman.GetPosition()))
+                pacman.Stop(pacman.GetDirection());
+
+            // Check for food collection
+            if (maze.isFood(pacman.GetPosition())) {
+                score += 10;
+            }
+
+            // Check for super food collection
+            if (maze.isSuperFood(pacman.GetPosition())) {
+                score += 50;
+                superMode = true;
+                pacman.SuperScale();  // Scale up Pacman for super mode
+                superModeTimer = SUPER_MODE_DURATION;
+                playSuperMusic();
+
+                // Change all ghosts to white
+                for (auto g : gameGhosts) {
+                    g->setColor(Color::White);
+                }
+            }
+            if (!superMode) {
+                pacman.ResetScale();  // Reset Pacman scale when not in super mode
+                stopsuperMusic;
+            }
+            pacman.Update();
+
+            // Draw maze
+            maze.draw(window);
+
+            // Draw and update ghosts
+            // In the MainGame function, update the game loop for ghost behaviors
+
+// Inside the gameStarted condition after ghost movement logic:
+
+// Move and update ghosts
+            for (size_t i = 0; i < gameGhosts.size() && i < ghostsBlinking.size(); i++) {
+                Ghost* g = gameGhosts[i];
+
+                // Handle blinking ghosts
+                if (ghostsBlinking[i]) {
+                    ghostBlinkTimers[i] += dt;
+
+                    // Blink effect - toggle visibility every 0.2 seconds
+                    if (static_cast<int>(ghostBlinkTimers[i] * 5) % 2 == 0) {
+                        g->setColor(Color::White);
+                    }
+                    else {
+                        g->setColor(Color(255, 255, 255, 50));  // Semi-transparent instead of invisible
+                    }
+
+                    // After 2 seconds of blinking, return to spawn
+                    if (ghostBlinkTimers[i] >= 2.0f) {
+                        ghostsBlinking[i] = false;
+                        ghostsReturnToSpawn[i] = true;
+                        g->setColor(originalGhostColors[i]);  // Restore original color
+
+                        // Set ghost to return to spawn point
+                        Vector2i spawnPos = maze.getGhost('0');  // Use ghost 0's spawn position
+                        g->SetPosition(
+                            spawnPos.x * cellSize + cellSize / 2,
+                            spawnPos.y * cellSize + cellSize / 2
+                        );
+                        ghostsReturnToSpawn[i] = false;
+                    }
+                }
+                // Update ghost movement if not returning to spawn
+                else if (!ghostsReturnToSpawn[i]) {
+                    // If this is a ChaserGhost, update Pacman's position
+                    ChaserGhost* chaser = dynamic_cast<ChaserGhost*>(g);
+                    if (chaser) {
+                        chaser->setPacmanPosition(pacman.GetPosition());
+                    }
+
+                    // Update ghost movement
+                    g->updateAutonomous(maze);
+
+                    // Check if this is a TimeStopGhost and if it has activated its ability
+                    TimeStopGhost* timeStop = dynamic_cast<TimeStopGhost*>(g);
+                    if (timeStop && timeStop->isTimeStopActive()) {
+                        // Freeze Pacman - don't process movement for this frame
+                        // The visual indicator of being frozen
+                        pacman.setColor(Color(150, 150, 255)); // Blue tint when frozen
+
+                    }
+                    else {
+                        // Reset Pacman color if not frozen
+                        pacman.setColor(Color::White);
+                    }
+
+                    // Check for collision with Pacman
+                    if (g->GhostCollision(pacman.GetPosition())) {
+                        if (superMode) {
+                            // In super mode, ghost gets eaten
+                            score += 200;
+                            ghostsBlinking[i] = true;
+                            ghostBlinkTimers[i] = 0.0f;
+                        }
+                        else {
+                            // Only lose a life if not a TimeStopGhost (which just freezes)
+                            TimeStopGhost* timeStop = dynamic_cast<TimeStopGhost*>(g);
+                            if (!timeStop || !timeStop->isTimeStopActive()) {
+                                // Normal mode - Pacman loses a life
+                                lives--;
+
+                                if (lives <= 0) {
+                                    // Game over logic
+                                    cout << "Game Over!" << endl;
+
+                                    // Return to menu
+                                    inMenu = true;
+                                    gameStarted = false;
+
+                                    // Reset game state
+                                    score = 0;
+                                    lives = 3;
+                                    superMode = false;
+
+                                    // Clean up ghosts
+                                    for (auto ghost : gameGhosts) {
+                                        delete ghost;
+                                    }
+                                    gameGhosts.clear();
+
+                                    // Reset maze
+                                    maze.reset();
+
+                                    // Reset Pacman position
+                                    pacman.SetPosition(pacmanStartPos.x, pacmanStartPos.y);
+
+                                    // Restart menu music
+                                    playMenuMusic();
+
+                                    break;  // Exit the ghost loop
+                                }
+                                else {
+                                    // Reset Pacman position after losing a life
+                                    pacman.SetPosition(pacmanStartPos.x, pacmanStartPos.y);
+                                }
+                            }
+                        }
+                    }
                 }
 
-                // Try the new direction immediately
-                Move(currentDirection, maze);
+                g->Update(dt);
+                window.draw(g->getSprite());
             }
-        }
-        else {
-            // Continue moving in current direction
-            Move(currentDirection, maze);
-        }
 
-        // Update animation and timers
-        Update(deltaTime);
-    }
+            // Draw Pacman
+            window.draw(pacman.getSprite());
 
-    Direction getRandomDirection() {
-        // Get a completely random direction
-        Direction directions[4] = { LEFT, RIGHT, UP, DOWN };
-        return directions[rand() % 4];
-    }
-
-    Direction getRandomDirection(Direction currentDir) {
-        // Get a random direction that's not the opposite of current direction
-        Direction opposite = getOpposite(currentDir);
-        Direction directions[4] = { LEFT, RIGHT, UP, DOWN };
-        Direction newDir;
-
-        do {
-            newDir = directions[rand() % 4];
-        } while (newDir == opposite);
-
-        return newDir;
-    }
-
-    void menMove(Direction dir) {
-        currentDirection = dir;
-
-        switch (dir) {
-        case LEFT:  position.x -= speed; break;
-        case RIGHT: position.x += speed; break;
-        case UP:    position.y -= speed; break;
-        case DOWN:  position.y += speed; break;
+            // Draw UI elements (score, lives, etc.)
+            drawUI(window, font, score, lives, superMode, superModeTimer);
         }
 
-        sprite.setPosition(position);
-
-        // Update the animation with the current direction
-        animation.update(1.0f / 60.0f, currentDirection, sprite);
+        window.display();
     }
 
-    // Call this every frame with deltaTime
-    void Update(float deltaTime) {
-        // Update animation
-        animation.update(deltaTime, currentDirection, sprite);
+    // Clean up
+    for (auto g : menuGhosts) delete g;
+    for (auto g : gameGhosts) delete g;
 
-        // Update wait timer if in spawn box
-        if (inSpawnBox && waitTimer > 0) {
-            waitTimer -= deltaTime;
-        }
+    // Stop music if still playing
+    stopMenuMusic();
+    stopsuperMusic();
+}
 
-        // Handle super mode timer if active
-        if (inSuperMode) {
-            superModeTimer -= deltaTime;
-            if (superModeTimer <= 0) {
-                inSuperMode = false;
-                setFrame(1); // Reset to normal frame
-            }
-        }
-    }
-
-    void Reset() {
-        position = initialPosition;
-        sprite.setPosition(position);
-        animation.reset();
-        setFrame(1); // Reset to normal frame
-        inSuperMode = false;
-        superModeTimer = 0.0f;
-        inSpawnBox = true;
-        waitTimer = (rand() % 3) + 0.5f; // Random wait time between 0.5 and 3.5 seconds
-
-        // Reset behavior variables
-        isScattered = true;
-        scatterTimer = 0.0f;
-        behaviorTimer = 0.0f;
-    }
-
-    sf::Vector2f GetPosition() const {
-        return position;
-    }
-
-    sf::Sprite getSprite() const {
-        return sprite;
-    }
-
-    bool GhostCollision(const sf::Vector2f& pacmanPosition) const {
-        return sprite.getGlobalBounds().intersects(sf::FloatRect(pacmanPosition, sf::Vector2f(40, 40)));
-    }
-
-    // SuperMode function that handles collision with Pacman
-    void SuperMode(const sf::Vector2f& pacmanPosition) {
-        if (GhostCollision(pacmanPosition)) {
-            // Change to frame 7 if collision occurs
-            setFrame(7);
-            // Return ghost to initial position
-            position = initialPosition;
-            sprite.setPosition(position);
-            // Enter super mode
-            inSuperMode = true;
-            superModeTimer = SUPER_MODE_DURATION;
-            // Reset spawn box state
-            inSpawnBox = true;
-            waitTimer = (rand() % 3) + 0.5f; // Random wait time
-        }
-    }
-
-    // Static method to create ghosts based on their ID from the maze
-    static Ghost* CreateGhostForPosition(Maze& maze, char ghostId, float speed, float scale) {
-        // Path to the ghost spritesheet
-        std::string spritePath = "ghost16.png";
-
-        // Define frame dimensions
-        int frameWidth = 32;
-        int frameHeight = 32;
-
-        // Total number of frames in the spritesheet
-        int frameCount = 16;
-
-        // Get the maze offset (starting position)
-        Vector2f mazeOffset = maze.getOffset();
-
-        // Hard-coded spawn box center position - we'll offset ghosts from this point
-        Vector2f spawnBoxCenter;
-
-        // The spawn box center is approximately the middle of where '0', '1', '2', '3' are placed
-        // Based on the cell-based system
-        int spawnBoxCenterRow = 10;
-        int spawnBoxCenterCol = 11;
-
-        // Convert to world coordinates
-        spawnBoxCenter = maze.cellToPosition(spawnBoxCenterCol, spawnBoxCenterRow);
-
-        // Position offset for each ghost
-        Vector2f ghostOffset;
-        int cellSize = Maze::getCellSize();
-
-        // Offset each ghost based on their ID
-        switch (ghostId) {
-        case '0': // Red ghost - top left
-            ghostOffset = Vector2f(-cellSize / 2, -cellSize / 2);
-            break;
-        case '1': // Pink ghost - top right
-            ghostOffset = Vector2f(cellSize / 2, -cellSize / 2);
-            break;
-        case '2': // Cyan ghost - bottom left
-            ghostOffset = Vector2f(-cellSize / 2, cellSize / 2);
-            break;
-        case '3': // Orange ghost - bottom right
-            ghostOffset = Vector2f(cellSize / 2, cellSize / 2);
-            break;
-        default:
-            ghostOffset = Vector2f(0, 0);
-        }
-
-        // Calculate final position
-        Vector2f finalPosition = spawnBoxCenter + ghostOffset;
-
-        std::cout << "Creating ghost " << ghostId << " at position ("
-            << finalPosition.x << ", " << finalPosition.y << ")" << std::endl;
-
-        // Select frame color based on ghost ID
-        int baseFrame;
-        switch (ghostId) {
-        case '0': baseFrame = 1; break;
-        case '1': baseFrame = 2; break;
-        case '2': baseFrame = 3; break;
-        case '3': baseFrame = 4; break;
-        default:  baseFrame = 1; break;
-        }
-
-        // Create frame indexes for each direction
-        std::map<Direction, int> frameIndexes = {
-            {LEFT, baseFrame},
-            {RIGHT, baseFrame},
-            {UP, baseFrame},
-            {DOWN, baseFrame}
-        };
-
-        // Create and return a new Ghost instance
-        return new Ghost(spritePath, frameCount, frameWidth, frameHeight,
-            finalPosition.x, finalPosition.y, speed, scale, frameIndexes);
-    }
-};
+int main() {
+    MainGame();
+    return 0;
+}

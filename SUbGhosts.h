@@ -1,14 +1,105 @@
-#include "Ghosts.h"
-#include <random>
-#include <ctime>
+class RingGhost : public Ghost {
+private:
+    bool isVisible;
+    float visibilityTimer;
+    const float INVISIBLE_DURATION = 3.0f;
+    const float VISIBLE_DURATION = 5.0f;
+    const float BLINK_WARNING_DURATION = 1.0f;  // Duration of blinking warning before state change
+    bool isBlinking;  // Flag to indicate if ghost is currently blinking
+    float blinkTimer;  // Timer for controlling blink frequency
 
-// Base Ghost class is already defined in entity.h
+public:
+    RingGhost(const std::string& spriteSheetPath,
+        int frameCount, int frameWidth, int frameHeight,
+        float x, float y, float speed, float scale,
+        const std::map<Direction, int>& frameIndexes)
+        : Ghost(spriteSheetPath, frameCount, frameWidth, frameHeight, x, y, speed, scale, frameIndexes),
+        isVisible(true),
+        visibilityTimer(0.0f),
+        isBlinking(false),
+        blinkTimer(0.0f) {
+        updateVisibility();
+    }
 
-// Teleporter Ghost: Teleports to a random allowed area every 10 seconds
+    bool getIsVisible() const { return isVisible; }
+    float getVisibilityTimer() const { return visibilityTimer; }
+    bool getIsBlinking() const { return isBlinking; }
+
+    void Update(float deltaTime) override {
+        Ghost::Update(deltaTime);
+        visibilityTimer += deltaTime;
+
+        // Check if we need to start blinking before state change
+        if (isVisible && !isBlinking && visibilityTimer >= VISIBLE_DURATION - BLINK_WARNING_DURATION) {
+            isBlinking = true;
+            blinkTimer = 0.0f;
+        }
+        else if (!isVisible && !isBlinking && visibilityTimer >= INVISIBLE_DURATION - BLINK_WARNING_DURATION) {
+            isBlinking = true;
+            blinkTimer = 0.0f;
+        }
+
+        // Handle blinking effect
+        if (isBlinking) {
+            blinkTimer += deltaTime;
+
+            // Toggle visibility rapidly (10 times per second)
+            sf::Color color = sprite.getColor();
+            if (static_cast<int>(blinkTimer * 10) % 2 == 0) {
+                color.a = 255;  // Fully visible
+            }
+            else {
+                color.a = 80;   // Semi-transparent
+            }
+            setColor(color);
+
+            // Check if blinking period is over and we need to change state
+            if ((isVisible && visibilityTimer >= VISIBLE_DURATION) ||
+                (!isVisible && visibilityTimer >= INVISIBLE_DURATION)) {
+                // Change visibility state
+                isVisible = !isVisible;
+                isBlinking = false;
+                visibilityTimer = 0.0f;
+                updateVisibility();
+            }
+        }
+    }
+
+    void updateVisibility() {
+        sf::Color color = sprite.getColor();
+        color.a = isVisible ? 255 : 0; // Full opacity when visible, transparent when invisible
+        setColor(color);
+    }
+
+    // Override the getSprite method to control visibility
+    sf::Sprite getSprite() const override {
+        return Ghost::getSprite();
+    }
+
+    // RingGhost can still collide even when invisible
+    bool GhostCollision(const sf::Vector2f& pacmanPosition) const override {
+        // Ghost can collide even when invisible
+        return Ghost::GhostCollision(pacmanPosition);
+    }
+
+    void Reset() override {
+        Ghost::Reset();
+        isVisible = true;
+        visibilityTimer = 0.0f;
+        isBlinking = false;
+        blinkTimer = 0.0f;
+        updateVisibility();
+    }
+};
+
 class TeleporterGhost : public Ghost {
 private:
-    float teleportTimer;
-    const float TELEPORT_INTERVAL = 10.0f; // Teleport every 10 seconds
+    float teleportTimer;            // Track time until next teleport
+    const float TELEPORT_INTERVAL = 10.0f;  // Seconds between teleports
+    const float FLICKER_DURATION = 2.0f;    // Duration of flickering before teleport
+    bool isFlickering;              // Flag for flickering state
+    float flickerTimer;             // Timer for controlling flicker frequency
+    std::vector<sf::Vector2f> teleportLocations; // Predefined teleport locations
 
 public:
     TeleporterGhost(const std::string& spriteSheetPath,
@@ -16,241 +107,179 @@ public:
         float x, float y, float speed, float scale,
         const std::map<Direction, int>& frameIndexes)
         : Ghost(spriteSheetPath, frameCount, frameWidth, frameHeight, x, y, speed, scale, frameIndexes),
-        teleportTimer(0.0f) {
+        teleportTimer(0.0f),
+        isFlickering(false),
+        flickerTimer(0.0f)
+    {
+        // Initialize predefined teleport locations (adjust coordinates based on your maze)
+        initTeleportLocations();
+    }
+
+    void initTeleportLocations() {
+        // Define 8 valid teleport locations based on the provided grid coordinates
+        // Converting grid positions to pixel positions with CELL_SIZE = 40
+        // For each grid position (x,y), calculate pixel position as (x*40 + offset.x, y*40 + offset.y)
+        // to place the ghost at the correct position accounting for maze offset
+
+        const sf::Vector2f offset(60.f, 40.f); // Maze offset
+
+        const std::vector<sf::Vector2i> TELEPORT_POINTS = {
+            {2, 1},   // Top-left corner
+            {17, 1},  // Top-right
+            {2, 15},  // Bottom-left
+            {17, 15}, // Bottom-right
+            {9, 4},   // Center-top
+            {9, 12},  // Center-bottom
+            {4, 9},   // Left-center
+            {14, 9}   // Right-center
+        };
+
+        teleportLocations.clear();
+        // Convert grid coordinates to pixel coordinates with offset
+        for (const auto& point : TELEPORT_POINTS) {
+            // Calculate center of the tile with offset
+            float x = point.x * CELL_SIZE + offset.x;
+            float y = point.y * CELL_SIZE + offset.y;
+            teleportLocations.push_back(sf::Vector2f(x, y));
+        }
     }
 
     void Update(float deltaTime) override {
-        Ghost::Update(deltaTime); // Call base class update
-
-        // Update teleport timer
+        Ghost::Update(deltaTime);
         teleportTimer += deltaTime;
-        if (teleportTimer >= TELEPORT_INTERVAL) {
-            teleportTimer = 0.0f;
-            // Teleport will be handled in updateAutonomous
+
+        // Check if it's time to start flickering before teleport
+        if (!isFlickering && teleportTimer >= TELEPORT_INTERVAL - FLICKER_DURATION) {
+            isFlickering = true;
+            flickerTimer = 0.0f;
+        }
+
+        // Handle flickering effect
+        if (isFlickering) {
+            flickerTimer += deltaTime;
+
+            // Toggle visibility rapidly (15 times per second)
+            sf::Color color = sprite.getColor();
+            if (static_cast<int>(flickerTimer * 15) % 2 == 0) {
+                color.a = 255;  // Fully visible
+            }
+            else {
+                color.a = 100;  // Semi-transparent
+            }
+            setColor(color);
+
+            // Check if flickering period is over and we need to teleport
+            if (teleportTimer >= TELEPORT_INTERVAL) {
+                teleport();
+                isFlickering = false;
+                teleportTimer = 0.0f;
+
+                // Reset color to fully visible after teleport
+                sf::Color fullColor = sprite.getColor();
+                fullColor.a = 255;
+                setColor(fullColor);
+            }
         }
     }
 
+    void teleport() {
+        // Choose a random location from predefined teleport points
+        int randomIndex = std::rand() % teleportLocations.size();
+        sf::Vector2f newPos = teleportLocations[randomIndex];
+
+        // Teleport the ghost
+        SetPosition(newPos.x, newPos.y);
+
+        // Create a teleport effect (optional)
+        // You could add particle effects or sound here
+    }
+
+    bool isTeleportValid(const sf::Vector2f& position, Maze& maze) const {
+        // Check if the position is walkable in the maze
+        // This method can be used to verify teleport positions
+        return maze.isWalkable(position);
+    }
+
+    // Add a method to dynamically find valid teleport positions from the maze
+    void updateTeleportLocations(Maze& maze) {
+        teleportLocations.clear();
+
+        // Scan the maze for walkable areas and add them as potential teleport locations
+        // This is an alternative to hardcoded positions
+        for (int y = 1; y < maze.getHeight() - 1; y += 4) {  // Skip every few rows for diversity
+            for (int x = 1; x < maze.getWidth() - 1; x += 4) { // Skip every few columns
+                sf::Vector2f pos(x * CELL_SIZE + CELL_SIZE / 2, y * CELL_SIZE + CELL_SIZE / 2);
+                if (maze.isWalkable(pos)) {
+                    teleportLocations.push_back(pos);
+
+                    // Limit to 8 positions maximum
+                    if (teleportLocations.size() >= 8) {
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Fallback if we found fewer than 8 positions
+        if (teleportLocations.empty()) {
+            // Add a default position as fallback
+            teleportLocations.push_back(sf::Vector2f(180.f, 180.f));
+        }
+    }
+
+    void Reset() override {
+        Ghost::Reset();
+        teleportTimer = 0.0f;
+        isFlickering = false;
+        flickerTimer = 0.0f;
+
+        // Ensure full visibility
+        sf::Color color = sprite.getColor();
+        color.a = 255;
+        setColor(color);
+    }
+
+    // The following methods are inherited and used as-is:
+    // updateAutonomous, GhostCollision, etc.
+
+    // Optional: make the teleporter ghost move more aggressively
     void updateAutonomous(Maze& maze) override {
-        if (teleportTimer >= TELEPORT_INTERVAL) {
-            teleportRandomly(maze);
-            teleportTimer = 0.0f;
-        }
-        else {
-            Ghost::updateAutonomous(maze); // Default movement when not teleporting
-        }
-    }
+        float deltaTime = 1.0f / 60.0f;
 
-private:
-    void teleportRandomly(Maze& maze) {
-        std::random_device rd;
-        std::mt19937 gen(rd());
+        // Try to move in current direction
+        if (!Move(currentDirection, maze)) {
+            // If blocked, pick a new valid direction (excluding opposite)
+            std::vector<Direction> possibleDirs;
 
-        // Get maze dimensions (you may need to add these getters to your Maze class)
-        int rows = maze.getRows(position);
-        int cols = maze.getCol(position);
-        const float CELL_SIZE = 40.0f; // This should match your maze cell size
+            for (int d = 0; d < 4; ++d) {
+                Direction dir = static_cast<Direction>(d);
+                if (dir == getOpposite(currentDirection)) continue;
 
-        // Try up to 20 random positions until finding a walkable one
-        for (int attempts = 0; attempts < 20; attempts++) {
-            std::uniform_int_distribution<> rowDist(0, rows - 1);
-            std::uniform_int_distribution<> colDist(0, cols - 1);
+                if (isValidDirection(maze, dir)) {
+                    possibleDirs.push_back(dir);
+                }
+            }
 
-            int randomRow = rowDist(gen);
-            int randomCol = colDist(gen);
-
-            // Convert to screen coordinates (center of cell)
-            float x = randomCol * CELL_SIZE + CELL_SIZE / 2;
-            float y = randomRow * CELL_SIZE + CELL_SIZE / 2;
-
-            if (maze.isWalkable(sf::Vector2f(x, y))) {
-                // Teleport effect - could add visual effects here
-                SetPosition(x, y);
-                return;
+            if (!possibleDirs.empty()) {
+                currentDirection = possibleDirs[std::rand() % possibleDirs.size()];
+                Move(currentDirection, maze);  // Try the new direction immediately
             }
         }
 
-        // If no valid position found after max attempts, just continue normal movement
+        Update(deltaTime);
     }
 };
 
-// Chaser Ghost: Always aggressively follows Pacman
-class ChaserGhost : public Ghost {
-private:
-    sf::Vector2f pacmanPosition;
-    const float UPDATE_TARGET_INTERVAL = 0.5f; // Update target position every half second
-    float updateTimer;
-
-public:
-    ChaserGhost(const std::string& spriteSheetPath,
-        int frameCount, int frameWidth, int frameHeight,
-        float x, float y, float speed, float scale,
-        const std::map<Direction, int>& frameIndexes)
-        : Ghost(spriteSheetPath, frameCount, frameWidth, frameHeight, x, y, speed, scale, frameIndexes),
-        updateTimer(0.0f) {
-    }
-
-    void Update(float deltaTime) override {
-        Ghost::Update(deltaTime);
-        updateTimer += deltaTime;
-    }
-
-    void updateAutonomous(Maze& maze) override {
-        // If we're not at a cell center, continue in current direction
-        float CELL_SIZE = 40.0f;
-        float centerX = std::round(GetPosition().x / CELL_SIZE) * CELL_SIZE + (CELL_SIZE / 2);
-        float centerY = std::round(GetPosition().y / CELL_SIZE) * CELL_SIZE + (CELL_SIZE / 2);
-
-        if (std::abs(GetPosition().x - centerX) > 2.0f || std::abs(GetPosition().y - centerY) > 2.0f) {
-            if (!Move(GetCurrentDirection(), maze)) {
-                // If blocked, use standard Ghost behavior to find a new path
-                Ghost::updateAutonomous(maze);
-            }
-            return;
-        }
-
-        // At an intersection, chase the pacman
-        Direction bestDir = findBestDirectionTowardsPacman(maze);
-        if (!Move(bestDir, maze)) {
-            // If can't move in best direction, use standard behavior
-            Ghost::updateAutonomous(maze);
-        }
-    }
-
-    void setPacmanPosition(const sf::Vector2f& position) {
-        pacmanPosition = position;
-    }
-
-private:
-    Direction findBestDirectionTowardsPacman(Maze& maze) {
-        std::vector<Direction> availableDirs = getAvailableDirections(maze);
-        if (availableDirs.empty()) return GetCurrentDirection();
-
-        // Calculate distances for each available direction
-        Direction bestDir = availableDirs[0];
-        float minDistance = std::numeric_limits<float>::max();
-
-        for (Direction dir : availableDirs) {
-            sf::Vector2f nextPos = GetPosition();
-            float CELL_SIZE = 40.0f;
-
-            switch (dir) {
-            case UP:    nextPos.y -= CELL_SIZE; break;
-            case DOWN:  nextPos.y += CELL_SIZE; break;
-            case LEFT:  nextPos.x -= CELL_SIZE; break;
-            case RIGHT: nextPos.x += CELL_SIZE; break;
-            }
-
-            float distance = std::sqrt(
-                std::pow(nextPos.x - pacmanPosition.x, 2) +
-                std::pow(nextPos.y - pacmanPosition.y, 2)
-            );
-
-            if (distance < minDistance) {
-                minDistance = distance;
-                bestDir = dir;
-            }
-        }
-
-        return bestDir;
-    }
-
-    Direction GetCurrentDirection() const {
-        // You may need to add this getter to your Ghost class
-        return currentDirection;
-    }
-};
-
-// Ambusher Ghost: Stops at junctions to ambush Pacman
-class AmbusherGhost : public Ghost {
-private:
-    bool isAmbushing;
-    float ambushTimer;
-    const float AMBUSH_DURATION = 2.0f; // Stop for 2 seconds
-
-public:
-    AmbusherGhost(const std::string& spriteSheetPath,
-        int frameCount, int frameWidth, int frameHeight,
-        float x, float y, float speed, float scale,
-        const std::map<Direction, int>& frameIndexes)
-        : Ghost(spriteSheetPath, frameCount, frameWidth, frameHeight, x, y, speed, scale, frameIndexes),
-        isAmbushing(false),
-        ambushTimer(0.0f) {
-    }
-
-    void Update(float deltaTime) override {
-        Ghost::Update(deltaTime);
-
-        if (isAmbushing) {
-            ambushTimer += deltaTime;
-            if (ambushTimer >= AMBUSH_DURATION) {
-                isAmbushing = false;
-                ambushTimer = 0.0f;
-            }
-        }
-    }
-
-    void updateAutonomous(Maze& maze) override {
-        if (isAmbushing) {
-            // Do nothing while ambushing - just wait
-            return;
-        }
-
-        // Check if we're at a junction (more than 2 possible directions)
-        std::vector<Direction> availableDirs = getAvailableDirections(maze);
-        if (availableDirs.size() > 2) {
-            // We're at a junction - start ambushing
-            isAmbushing = true;
-            ambushTimer = 0.0f;
-            return;
-        }
-
-        // Normal movement when not ambushing
-        Ghost::updateAutonomous(maze);
-    }
-};
-
-// RandomGhost: Just follows random paths (already implemented in base Ghost)
-class RandomGhost : public Ghost {
-public:
-    RandomGhost(const std::string& spriteSheetPath,
-        int frameCount, int frameWidth, int frameHeight,
-        float x, float y, float speed, float scale,
-        const std::map<Direction, int>& frameIndexes)
-        : Ghost(spriteSheetPath, frameCount, frameWidth, frameHeight, x, y, speed, scale, frameIndexes) {
-    }
-
-    // Uses default Ghost behavior - purely random movement
-};
-
-// HermesGhost: Exceptionally faster than other ghosts
-class HermesGhost : public Ghost {
-private:
-    const float SPEED_BOOST = 1.5f; // 50% faster
-
-public:
-    HermesGhost(const std::string& spriteSheetPath,
-        int frameCount, int frameWidth, int frameHeight,
-        float x, float y, float speed, float scale,
-        const std::map<Direction, int>& frameIndexes)
-        : Ghost(spriteSheetPath, frameCount, frameWidth, frameHeight, x, y, speed* SPEED_BOOST, scale, frameIndexes) {
-    }
-
-    // Uses default Ghost behavior but with increased speed
-};
-
-// PhantomGhost: Greater hit radius for catching Pacman
-class PhantomGhost : public Ghost {
-private:
-    const float EXTENDED_RADIUS = 1.5f; // 50% larger collision radius
-
+class PhantomGhost : public Ghost
+{
+    float EXTENDED_RADIUS;
 public:
     PhantomGhost(const std::string& spriteSheetPath,
         int frameCount, int frameWidth, int frameHeight,
         float x, float y, float speed, float scale,
         const std::map<Direction, int>& frameIndexes)
-        : Ghost(spriteSheetPath, frameCount, frameWidth, frameHeight, x, y, speed, scale, frameIndexes) {
+        : Ghost(spriteSheetPath, frameCount, frameWidth, frameHeight, x, y, speed, scale, frameIndexes), EXTENDED_RADIUS(2.0f) {
     }
-
     bool GhostCollision(const sf::Vector2f& pacmanPosition) const override {
         // Create larger bounds for collision detection
         sf::FloatRect pacmanBounds(
@@ -264,159 +293,207 @@ public:
     }
 };
 
-// TimeStopGhost: Stops Pacman for 2 seconds on collision
-class TimeStopGhost : public Ghost {
+class AmbusherGhost : public Ghost {
 private:
-    bool hasTimeStopActive;
-    float timeStopTimer;
-    const float TIME_STOP_DURATION = 2.0f;
-    const float TIME_STOP_COOLDOWN = 10.0f; // Cooldown for ability
-    float cooldownTimer;
+    const float AMBUSH_WAIT_TIME = 3.0f;  // Seconds to wait at ambush points
+    float ambushTimer;                    // Timer for tracking wait time
+    bool isWaiting;                       // Flag to indicate if ghost is waiting at ambush point
+
+    // Store all ambush points (coordinates of 'o' in the map)
+    std::vector<sf::Vector2f> ambushPoints;
+    int currentTargetIndex;               // Index of the current ambush point target
 
 public:
-    TimeStopGhost(const std::string& spriteSheetPath,
+    AmbusherGhost(const std::string& spriteSheetPath,
         int frameCount, int frameWidth, int frameHeight,
         float x, float y, float speed, float scale,
         const std::map<Direction, int>& frameIndexes)
         : Ghost(spriteSheetPath, frameCount, frameWidth, frameHeight, x, y, speed, scale, frameIndexes),
-        hasTimeStopActive(false),
-        timeStopTimer(0.0f),
-        cooldownTimer(0.0f) {
+        ambushTimer(0.0f),
+        isWaiting(false),
+        currentTargetIndex(0) {
+
+        // Manually set the coordinates of the ambush points ('o' in the map)
+        // Based on the provided map, these are the 'o' coordinates (converting to pixel coordinates)
+        // The format is: x = column * CELL_SIZE + CELL_SIZE/2, y = row * CELL_SIZE + CELL_SIZE/2
+
+        // First 'o' at (2, 2)
+        ambushPoints.push_back(sf::Vector2f(2 * CELL_SIZE + CELL_SIZE / 2, 2 * CELL_SIZE + CELL_SIZE / 2));
+
+        // Second 'o' at (17, 2)
+        ambushPoints.push_back(sf::Vector2f(17 * CELL_SIZE + CELL_SIZE / 2, 2 * CELL_SIZE + CELL_SIZE / 2));
+
+        // Third 'o' at (2, 15)
+        ambushPoints.push_back(sf::Vector2f(2 * CELL_SIZE + CELL_SIZE / 2, 15 * CELL_SIZE + CELL_SIZE / 2));
+
+        // Fourth 'o' at (17, 15)
+        ambushPoints.push_back(sf::Vector2f(17 * CELL_SIZE + CELL_SIZE / 2, 15 * CELL_SIZE + CELL_SIZE / 2));
     }
 
-    void Update(float deltaTime) override {
-        Ghost::Update(deltaTime);
+    void updateAutonomous(Maze& maze) override {
+        float deltaTime = 1.0f / 60.0f;
 
-        if (hasTimeStopActive) {
-            timeStopTimer += deltaTime;
-            if (timeStopTimer >= TIME_STOP_DURATION) {
-                hasTimeStopActive = false;
-                timeStopTimer = 0.0f;
+        // Check if currently waiting at an ambush point
+        if (isWaiting) {
+            ambushTimer += deltaTime;
+
+            // Continue waiting until timer is up
+            if (ambushTimer < AMBUSH_WAIT_TIME) {
+                // Update animation while waiting
+                Update(deltaTime);
+                return;
+            }
+            else {
+                // Done waiting, resume movement and target the next ambush point
+                isWaiting = false;
+                currentTargetIndex = (currentTargetIndex + 1) % ambushPoints.size();
             }
         }
 
-        if (cooldownTimer > 0) {
-            cooldownTimer -= deltaTime;
+        // Get current position in grid coordinates
+        int currentCellX = static_cast<int>(position.x / CELL_SIZE);
+        int currentCellY = static_cast<int>(position.y / CELL_SIZE);
+
+        // Get current target ambush point
+        sf::Vector2f targetPoint = ambushPoints[currentTargetIndex];
+        int targetCellX = static_cast<int>(targetPoint.x / CELL_SIZE);
+        int targetCellY = static_cast<int>(targetPoint.y / CELL_SIZE);
+
+        // Check if we've reached the current target ambush point
+        if (currentCellX == targetCellX && currentCellY == targetCellY && isAtCellCenter()) {
+            // Start waiting at this ambush point
+            isWaiting = true;
+            ambushTimer = 0.0f;
+            Update(deltaTime);
+            return;
         }
-    }
 
-    bool canTimeStopPacman() const {
-        return cooldownTimer <= 0.0f;
-    }
+        // If not at target, move toward it using A* or simpler pathfinding
+        Direction bestDirection = calculateBestDirection(maze, targetPoint);
 
-    void activateTimeStop() {
-        if (canTimeStopPacman()) {
-            hasTimeStopActive = true;
-            timeStopTimer = 0.0f;
-            cooldownTimer = TIME_STOP_COOLDOWN;
+        // Try to move in best direction
+        if (Move(bestDirection, maze)) {
+            // Successfully moved in best direction
         }
+        else {
+            // If blocked, try alternate directions
+            std::vector<Direction> possibleDirs;
+
+            for (int d = 0; d < 4; ++d) {
+                Direction dir = static_cast<Direction>(d);
+                if (dir == getOpposite(currentDirection)) continue;
+
+                if (isValidDirection(maze, dir)) {
+                    possibleDirs.push_back(dir);
+                }
+            }
+
+            if (!possibleDirs.empty()) {
+                // Choose a random valid direction if best direction is blocked
+                currentDirection = possibleDirs[std::rand() % possibleDirs.size()];
+                Move(currentDirection, maze);
+            }
+        }
+
+        Update(deltaTime);
     }
 
-    bool isTimeStopActive() const {
-        return hasTimeStopActive;
+    // Calculate the best direction to move toward the target point
+    Direction calculateBestDirection(Maze& maze, sf::Vector2f targetPoint) {
+        // Simplistic approach: choose direction that gets us closest to target
+        std::vector<Direction> possibleDirections;
+        std::vector<float> distances;
+
+        // Check each possible direction
+        for (int d = 0; d < 4; ++d) {
+            Direction dir = static_cast<Direction>(d);
+
+            // Skip the opposite direction (no backtracking)
+            if (dir == getOpposite(currentDirection) && !isAtIntersection(maze)) {
+                continue;
+            }
+
+            // Check if this direction is valid
+            if (isValidDirection(maze, dir)) {
+                // Calculate position after moving in this direction
+                sf::Vector2f newPos = position;
+                switch (dir) {
+                case RIGHT: newPos.x += CELL_SIZE; break;
+                case LEFT:  newPos.x -= CELL_SIZE; break;
+                case UP:    newPos.y -= CELL_SIZE; break;
+                case DOWN:  newPos.y += CELL_SIZE; break;
+                }
+
+                // Calculate distance to target from new position
+                float dx = newPos.x - targetPoint.x;
+                float dy = newPos.y - targetPoint.y;
+                float distance = std::sqrt(dx * dx + dy * dy);
+
+                possibleDirections.push_back(dir);
+                distances.push_back(distance);
+            }
+        }
+
+        // Find direction with shortest distance to target
+        if (!possibleDirections.empty()) {
+            int bestIndex = 0;
+            float minDistance = distances[0];
+
+            for (size_t i = 1; i < distances.size(); ++i) {
+                if (distances[i] < minDistance) {
+                    minDistance = distances[i];
+                    bestIndex = i;
+                }
+            }
+
+            return possibleDirections[bestIndex];
+        }
+
+        // If no valid directions, keep current direction
+        return currentDirection;
+    }
+
+    // Check if ghost is at an intersection (more than one possible direction)
+    bool isAtIntersection(Maze& maze) const {
+        int validDirections = 0;
+
+        for (int d = 0; d < 4; ++d) {
+            Direction dir = static_cast<Direction>(d);
+            Vector2f testPos = position;
+
+            // Move one cell in the given direction
+            switch (dir) {
+            case RIGHT: testPos.x += CELL_SIZE; break;
+            case LEFT:  testPos.x -= CELL_SIZE; break;
+            case UP:    testPos.y -= CELL_SIZE; break;
+            case DOWN:  testPos.y += CELL_SIZE; break;
+            }
+
+            if (maze.isWalkable(testPos)) {
+                validDirections++;
+            }
+        }
+
+        // An intersection has more than 2 valid directions
+        return validDirections > 2;
+    }
+
+    // Helper method to check if ghost is centered enough in a cell
+    bool isAtCellCenter() const {
+        float cellCenterX = std::floor(position.x / CELL_SIZE) * CELL_SIZE + (CELL_SIZE / 2);
+        float cellCenterY = std::floor(position.y / CELL_SIZE) * CELL_SIZE + (CELL_SIZE / 2);
+
+        // Define threshold for being "centered enough" (a small value, e.g., 5 pixels)
+        const float CENTERED_THRESHOLD = 5.0f;
+
+        return (std::abs(position.x - cellCenterX) < CENTERED_THRESHOLD &&
+            std::abs(position.y - cellCenterY) < CENTERED_THRESHOLD);
+    }
+
+    void Reset() override {
+        Ghost::Reset();
+        ambushTimer = 0.0f;
+        isWaiting = false;
+        currentTargetIndex = 0; // Reset to target the first ambush point
     }
 };
-
-// RingGhost: Disappears for 3 seconds but can still move and collide with Pacman
-class RingGhost : public Ghost {
-private:
-    bool isVisible;
-    float visibilityTimer;
-    const float INVISIBLE_DURATION = 3.0f;
-    const float VISIBLE_DURATION = 5.0f;
-
-public:
-    RingGhost(const std::string& spriteSheetPath,
-        int frameCount, int frameWidth, int frameHeight,
-        float x, float y, float speed, float scale,
-        const std::map<Direction, int>& frameIndexes)
-        : Ghost(spriteSheetPath, frameCount, frameWidth, frameHeight, x, y, speed, scale, frameIndexes),
-        isVisible(true),
-        visibilityTimer(0.0f) {
-    }
-
-    void Update(float deltaTime) override {
-        Ghost::Update(deltaTime);
-
-        visibilityTimer += deltaTime;
-
-        if (isVisible && visibilityTimer >= VISIBLE_DURATION) {
-            isVisible = false;
-            visibilityTimer = 0.0f;
-            updateVisibility();
-        }
-        else if (!isVisible && visibilityTimer >= INVISIBLE_DURATION) {
-            isVisible = true;
-            visibilityTimer = 0.0f;
-            updateVisibility();
-        }
-    }
-
-    void updateVisibility() {
-        sf::Color color = getSprite().getColor();
-        color.a = isVisible ? 255 : 0; // Full opacity when visible, transparent when invisible
-        setColor(color);
-    }
-
-    // Override the Draw method to control visibility
-    sf::Sprite getSprite() const override {
-        return Ghost::getSprite();
-    }
-
-    // RingGhost can still collide even when invisible
-    bool GhostCollision(const sf::Vector2f& pacmanPosition) const override {
-        return Ghost::GhostCollision(pacmanPosition);
-    }
-};
-
-// Factory function to create a specific ghost based on type name
-Ghost* createSpecialGhost(const std::string& ghostType,
-    const std::string& spriteSheetPath,
-    float x, float y, float baseSpeed) {
-    int frameCount = 4;
-    int frameWidth = 50;
-    int frameHeight = 50;
-    float scale = 1.3f;
-
-    std::map<Direction, int> frameIndexes = {
-        {RIGHT, 0}, {UP, 1}, {DOWN, 2}, {LEFT, 3}
-    };
-
-    if (ghostType == "TELEPORTER") {
-        return new TeleporterGhost(spriteSheetPath, frameCount, frameWidth, frameHeight,
-            x, y, baseSpeed, scale, frameIndexes);
-    }
-    else if (ghostType == "CHASER") {
-        return new ChaserGhost(spriteSheetPath, frameCount, frameWidth, frameHeight,
-            x, y, baseSpeed, scale, frameIndexes);
-    }
-    else if (ghostType == "AMBUSHER") {
-        return new AmbusherGhost(spriteSheetPath, frameCount, frameWidth, frameHeight,
-            x, y, baseSpeed, scale, frameIndexes);
-    }
-    else if (ghostType == "RANDOMGHOST") {
-        return new RandomGhost(spriteSheetPath, frameCount, frameWidth, frameHeight,
-            x, y, baseSpeed, scale, frameIndexes);
-    }
-    else if (ghostType == "HERMES") {
-        return new HermesGhost(spriteSheetPath, frameCount, frameWidth, frameHeight,
-            x, y, baseSpeed, scale, frameIndexes);
-    }
-    else if (ghostType == "PHANTOM") {
-        return new PhantomGhost(spriteSheetPath, frameCount, frameWidth, frameHeight,
-            x, y, baseSpeed, scale, frameIndexes);
-    }
-    else if (ghostType == "TIMESTOP") {
-        return new TimeStopGhost(spriteSheetPath, frameCount, frameWidth, frameHeight,
-            x, y, baseSpeed, scale, frameIndexes);
-    }
-    else if (ghostType == "RINGGHOST") {
-        return new RingGhost(spriteSheetPath, frameCount, frameWidth, frameHeight,
-            x, y, baseSpeed, scale, frameIndexes);
-    }
-    else {
-        // Default to random ghost if type not recognized
-        return new RandomGhost(spriteSheetPath, frameCount, frameWidth, frameHeight,
-            x, y, baseSpeed, scale, frameIndexes);
-    }
-}

@@ -130,7 +130,9 @@ public:
         sprite.setPosition(position);
         animation.reset();
     }
-
+    void setColor(const sf::Color& color) {
+        sprite.setColor(color);
+    }
     void SnapToGrid() {
         float cs = Maze::getCellSize();
         position.x = round(position.x / cs) * cs;

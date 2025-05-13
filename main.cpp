@@ -2,6 +2,7 @@
 #include "maze.h"
 #include "pacman.h"
 #include "Ghosts.h"
+#include "SubGhosts.h"
 #include <windows.h>
 #include <vector>
 #include <cstdlib>
@@ -19,6 +20,24 @@ using namespace sf;
 
 const int windowWidth = 960;
 const int windowHeight = 1050;
+
+// Define the GhostInfo structure for storing ghost details
+struct GhostInfo {
+    string name;
+    string description;
+};
+
+// Map to store information about each ghost type
+map<string, GhostInfo> ghostInfoMap = {
+    {"TELEPORTER", {"TELEPORTER", "TELEPORTS - One Second here,Next Second there"}},
+    {"RANDOMGHOST", {"RANDOM", "RANDOM - What's even the point ?"}},
+    {"CHASER", {"CHASER", "CHASES PACMAN - You may run but you will not hide"}},
+    {"AMBUSHER", {"AMBUSHER", "CAMPS SUPERFOOD - No Even Further Beyond"}},
+    {"HERMES", {"HERMES", "SWIFT - You may hide but you will not run"}},
+    {"PHANTOM", {"PHANTOM", "EXTENDED HIT RADIUS - Loves his loneliness"}},
+    {"TIMESTOP", {"TIME STOP", "PAUSES PACMAN - You shall not Pass"}},
+    {"RINGGHOST", {"RING", "INVISIBILITY - You can't see him"}}
+};
 
 vector<string> ghostNames = {
     "TELEPORTER", "RANDOMGHOST", "CHASER", "AMBUSHER",
@@ -53,8 +72,6 @@ void playMenuMusic() {
     menuMusic.play();
 }
 
-
-
 void playSuperMusic() {
     // Load the music file
     if (!superMusic.openFromFile("ssj3.wav")) {
@@ -63,7 +80,6 @@ void playSuperMusic() {
     }
 
     // Set up the music properties
-
     menuMusic.setVolume(75);   // Adjust volume (0-100)
 
     // Play the music
@@ -191,15 +207,21 @@ void updateDots(vector<Dot>& dots, float dt) {
     }
 }
 
-void spawnGameGhosts(vector<Ghost*>& gameGhosts, const Maze& maze) {
+void spawnGameGhosts(vector<Ghost*>& gameGhosts, const Maze& maze, vector<string>& selectedGhosts) {
     vector<string> ghostNames = {
         "RANDOMGHOST", "CHASER", "AMBUSHER", "PHANTOM",
-        "HERMES", "RINGGHOST"
+        "HERMES", "RINGGHOST","TELEPORTER", "TIMESTOP"
     };
 
     random_device rd;
     mt19937 gen(rd());
     shuffle(ghostNames.begin(), ghostNames.end(), gen);
+
+    // Clear the selected ghosts list and add the first 4 ghost types
+    selectedGhosts.clear();
+    for (int i = 0; i < 4; ++i) {
+        selectedGhosts.push_back(ghostNames[i]);
+    }
 
     for (int i = 0; i < 4; ++i) {
         string ghostName = ghostNames[i];
@@ -217,10 +239,122 @@ void spawnGameGhosts(vector<Ghost*>& gameGhosts, const Maze& maze) {
         float x = ghostPos.x * TILE_SIZE;
         float y = ghostPos.y * TILE_SIZE;
 
-        Ghost* g = new Ghost(spriteSheetPath, 4, 50, 50,
-            x + TILE_SIZE / 2, y + TILE_SIZE / 2, 2.5f, 1.3f,
-            frameIndexes);
-        gameGhosts.push_back(g);
+        if (ghostName == "HERMES")
+        {
+            Ghost* g = new Ghost(spriteSheetPath, 4, 50, 50,
+                x + TILE_SIZE / 2, y + TILE_SIZE / 2, 3.5f, 1.3f,
+                frameIndexes);
+            gameGhosts.push_back(g);
+        }
+        else if (ghostName == "RINGGHOST") {
+            Ghost* g = new RingGhost(spriteSheetPath, 4, 50, 50,
+                x + TILE_SIZE / 2, y + TILE_SIZE / 2, 2.5f, 1.3f,
+                frameIndexes);
+            gameGhosts.push_back(g);
+        }
+        else if (ghostName == "TELEPORTER") {
+            Ghost* g = new TeleporterGhost(spriteSheetPath, 4, 50, 50,
+                x + TILE_SIZE / 2, y + TILE_SIZE / 2, 2.5f, 1.3f,
+                frameIndexes);
+            gameGhosts.push_back(g);
+        }
+        else if (ghostName == "PHANTOM") {
+            Ghost* g = new Ghost(spriteSheetPath, 4, 50, 50,
+                x + TILE_SIZE / 2, y + TILE_SIZE / 2, 2.5f, 1.3f,
+                frameIndexes);
+            gameGhosts.push_back(g);
+        }
+        else if (ghostName == "AMBUSHER") {
+            Ghost* g = new AmbusherGhost(spriteSheetPath, 4, 50, 50,
+                x + TILE_SIZE / 2, y + TILE_SIZE / 2, 2.5f, 1.3f,
+                frameIndexes);
+            gameGhosts.push_back(g);
+        }
+        else
+        {
+            Ghost* g = new Ghost(spriteSheetPath, 4, 50, 50,
+                x + TILE_SIZE / 2, y + TILE_SIZE / 2, 2.5f, 1.3f,
+                frameIndexes);
+            gameGhosts.push_back(g);
+        }
+    }
+}
+
+void displayGhostAbilities(RenderWindow& window, const Font& font, const vector<string>& selectedGhosts,
+    vector<Dot>& backgroundDots, float dt) {
+    Clock displayClock;
+    float displayTime = 0.0f;
+    const float DISPLAY_DURATION = 10.0f; // Show for 5 seconds
+
+    // Create background with dots
+    while (displayTime < DISPLAY_DURATION && window.isOpen()) {
+        displayTime = displayClock.getElapsedTime().asSeconds();
+
+        Event event;
+        while (window.pollEvent(event)) {
+            if (event.type == Event::Closed)
+                window.close();
+            if (event.type == Event::KeyPressed) {
+                if (event.key.code == Keyboard::Return || event.key.code == Keyboard::Space) {
+                    // Allow skipping with Enter or Space
+                    return;
+                }
+            }
+        }
+
+        window.clear(Color(0, 0, 0)); // Dark blue background
+
+        // Update background dots
+        updateDots(backgroundDots, dt);
+        for (auto& d : backgroundDots)
+            window.draw(d.shape);
+
+        // Draw title
+        Text title("BEWARE OF THESE GHOSTS!", font, 48);
+        title.setFillColor(Color::Yellow);
+        title.setPosition(windowWidth / 2.f - title.getGlobalBounds().width / 2.f, 110);
+        window.draw(title);
+
+        // Draw ghost information
+        for (int i = 0; i < selectedGhosts.size() && i < 4; ++i) {
+            string ghostType = selectedGhosts[i];
+
+            // Create ghost sprite preview
+            Sprite ghostSprite;
+            Texture ghostTexture;
+            if (ghostTexture.loadFromFile("sprites/" + ghostType + ".png")) {
+                ghostSprite.setTexture(ghostTexture);
+                ghostSprite.setTextureRect(IntRect(0, 0, 50, 50)); // First frame
+                ghostSprite.setScale(2.0f, 2.0f);
+                ghostSprite.setPosition(30, 220 + i * 170);
+                window.draw(ghostSprite);
+            }
+
+            // Ghost name
+            Text nameText(ghostInfoMap[ghostType].name, font, 36);
+            nameText.setFillColor(Color::White);
+            nameText.setPosition(110, 210 + i * 160);
+            window.draw(nameText);
+
+            // Ghost description
+            Text descText(ghostInfoMap[ghostType].description, font, 24);
+            descText.setFillColor(Color(200, 200, 200));
+            descText.setPosition(150, 250 + i * 170);
+            window.draw(descText);
+        }
+
+        // Skip instruction
+        Text skipText("PRESS ENTER OR SPACE TO CONTINUE", font, 24);
+        skipText.setFillColor(Color(150, 150, 150));
+        skipText.setPosition(windowWidth / 2.f - skipText.getGlobalBounds().width / 2.f,
+            windowHeight - 100);
+
+        // Make the text blink
+        if (static_cast<int>(displayTime * 2) % 2 == 0) {
+            window.draw(skipText);
+        }
+
+        window.display();
     }
 }
 
@@ -448,9 +582,11 @@ void MainGame() {
 
     vector<Ghost*> menuGhosts = createMenuGhosts();
     vector<Ghost*> gameGhosts;
+    vector<string> selectedGhosts;
 
     bool inMenu = true;
     bool gameStarted = false;
+	bool gameOver = false;
     int score = 0;
     int lives = 3;
     bool superMode = false;
@@ -467,6 +603,8 @@ void MainGame() {
 
     // Start menu music
     playMenuMusic();
+
+    // Inside the MainGame() function, replace the main while loop with this corrected version:
 
     while (window.isOpen()) {
         float dt = clock.restart().asSeconds();
@@ -490,8 +628,12 @@ void MainGame() {
                             // Stop menu music when game starts
                             stopMenuMusic();
 
-                            spawnGameGhosts(gameGhosts, maze);
+                            // Spawn ghosts and get the list of selected ghosts
+                            spawnGameGhosts(gameGhosts, maze, selectedGhosts);
                             cout << "Game ghosts spawned: " << gameGhosts.size() << endl;
+
+                            // Display ghost abilities screen
+                            displayGhostAbilities(window, font, selectedGhosts, dots, dt);
 
                             // Store original ghost colors
                             for (size_t i = 0; i < gameGhosts.size() && i < originalGhostColors.size(); i++) {
@@ -547,6 +689,11 @@ void MainGame() {
                 }
             }
 
+            if (!superMode) {
+                pacman.ResetScale();  // Reset Pacman scale when not in super mode
+                stopsuperMusic();  // Fixed: Added parentheses to properly call the function
+            }
+
             // Move Pacman based on current direction and wall collisions
             Vector2f nextPos = pacman.GetPosition();
             float speed = 2.0f;
@@ -581,13 +728,10 @@ void MainGame() {
                     g->setColor(Color::White);
                 }
             }
-            if (!superMode) {
-                pacman.ResetScale();  // Reset Pacman scale when not in super mode
-                stopsuperMusic;
-            }
+
             pacman.Update();
 
-            // Draw maze
+            // Draw maze - only when in game mode
             maze.draw(window);
 
             // Draw and update ghosts
@@ -642,11 +786,11 @@ void MainGame() {
                                 cout << "Game Over!" << endl;
 
                                 // Return to menu
-                                inMenu = true;
+                                gameOver = true;
                                 gameStarted = false;
 
                                 // Reset game state
-                                score = 0;
+                                ;
                                 lives = 3;
                                 superMode = false;
 
@@ -667,6 +811,27 @@ void MainGame() {
 
                                 break;  // Exit the ghost loop
                             }
+                            else if (!maze.foodremains()) {
+								// Game over logic
+								cout << "Game Over!" << endl;
+								// Return to menu
+								gameOver = true;
+								gameStarted = false;
+								// Reset game state
+								lives = 3;
+								superMode = false;
+								// Clean up ghosts
+								for (auto ghost : gameGhosts) {
+									delete ghost;
+								}
+								gameGhosts.clear();
+								// Reset maze
+								maze.reset();
+								// Reset Pacman position
+								pacman.SetPosition(pacmanStartPos.x, pacmanStartPos.y);
+								// Restart menu music
+								playMenuMusic();
+                            }
                             else {
                                 // Reset Pacman position after losing a life
                                 pacman.SetPosition(pacmanStartPos.x, pacmanStartPos.y);
@@ -679,20 +844,123 @@ void MainGame() {
                 window.draw(g->getSprite());
             }
 
-            // Draw Pacman
+            // Draw Pacman - only when in game mode
             window.draw(pacman.getSprite());
 
-            // Draw UI elements (score, lives, etc.)
+            // Draw UI elements (score, lives, etc.) - only when in game mode
             drawUI(window, font, score, lives, superMode, superModeTimer);
         }
+        else if (gameOver) {
+			// Display game over screen
 
+            // Draw background
+            for (auto& d : dots) {
+                window.draw(d.shape);
+            }
+			
+			Text gameOverText("GAME OVER", font, 70);
+			gameOverText.setFillColor(Color::Red);
+			gameOverText.setPosition(windowWidth / 2.f - gameOverText.getGlobalBounds().width / 2.f, 300);
+			window.draw(gameOverText);
+            // Draw "Press Enter to Start" flashing text - FIX: Use a more appropriate format
+            ;
+            Text Score("SCORE: " + to_string(score), font, 100);
+            Score.setFillColor(Color::White);
+            Score.setPosition((windowWidth / 2.f - gameOverText.getGlobalBounds().width / 2.f)-120, 400);
+            window.draw(Score);
+            if (score == 0) {
+                Text rem("That was intentional right ?", font, 40);
+                rem.setFillColor(Color::White);
+                rem.setOrigin(rem.getLocalBounds().left + rem.getLocalBounds().width / 2.f,
+                    rem.getLocalBounds().top + rem.getLocalBounds().height / 2.f);
+                rem.setPosition(windowWidth / 2.f, 520);
+                window.draw(rem);
+            }
+            else if (score > 0 && score < 1000) {
+                Text rem("You're getting there?", font, 40);
+                rem.setFillColor(Color::White);
+                rem.setOrigin(rem.getLocalBounds().left + rem.getLocalBounds().width / 2.f,
+                    rem.getLocalBounds().top + rem.getLocalBounds().height / 2.f);
+                rem.setPosition(windowWidth / 2.f, 520);
+                window.draw(rem);
+            }
+            else if (score > 999 && score < 2000) {
+                Text rem("Pretty Impressive huh", font, 50);
+                rem.setFillColor(Color::White);
+                rem.setOrigin(rem.getLocalBounds().left + rem.getLocalBounds().width / 2.f,
+                    rem.getLocalBounds().top + rem.getLocalBounds().height / 2.f);
+                rem.setPosition(windowWidth / 2.f, 520);
+                window.draw(rem);
+            }
+            else if (score > 1999 && score < 3000) {
+                Text rem("Almost Completed Huh", font, 50);
+                rem.setFillColor(Color::White);
+                rem.setOrigin(rem.getLocalBounds().left + rem.getLocalBounds().width / 2.f,
+                    rem.getLocalBounds().top + rem.getLocalBounds().height / 2.f);
+                rem.setPosition(windowWidth / 2.f, 520);
+                window.draw(rem);
+            }
+            else if (score > 2999 && score < 4000 && !maze.foodremains()) {
+                Text rem("COMPLETED LESSGOO", font, 80);
+                rem.setFillColor(Color::White);
+                rem.setOrigin(rem.getLocalBounds().left + rem.getLocalBounds().width / 2.f,
+                    rem.getLocalBounds().top + rem.getLocalBounds().height / 2.f);
+                rem.setPosition(windowWidth / 2.f, 520);
+                window.draw(rem);
+            }
+            else if (score > 2999 && score < 4000 && maze.foodremains()) {
+                Text rem("How'd you not win?", font, 40);
+                rem.setFillColor(Color::White);
+                rem.setOrigin(rem.getLocalBounds().left + rem.getLocalBounds().width / 2.f,
+                    rem.getLocalBounds().top + rem.getLocalBounds().height / 2.f);
+                rem.setPosition(windowWidth / 2.f, 520);
+                window.draw(rem);
+            }
+            else if (score > 4000 && !maze.foodremains()) {
+                Text rem("HOW DID YOU GET 4K+????", font, 40);
+                rem.setFillColor(Color::White);
+                rem.setOrigin(rem.getLocalBounds().left + rem.getLocalBounds().width / 2.f,
+                    rem.getLocalBounds().top + rem.getLocalBounds().height / 2.f);
+                rem.setPosition(windowWidth / 2.f, 520);
+                window.draw(rem);
+            }
+
+            static float flashTimer = 0.0f;
+            flashTimer += dt;
+            if (sin(flashTimer * 3.0f) > 0) {  // Flash at 3Hz
+                Text pressEnter;
+                pressEnter.setString("PRESS ENTER TO RETURN TO MENU");
+                pressEnter.setFont(*menuTexts[0].getFont());
+                pressEnter.setCharacterSize(30);
+                pressEnter.setFillColor(Color::White);
+
+                // Center the text
+                pressEnter.setPosition(
+                    windowWidth / 2.f - pressEnter.getGlobalBounds().width / 2.f,
+                    650
+                );
+				updateDots(dots, dt);
+                // Add a shadow for better visibility
+                Text shadowPressEnter = pressEnter;
+                shadowPressEnter.setFillColor(Color(30, 30, 30, 150));
+                shadowPressEnter.setPosition(pressEnter.getPosition() + Vector2f(2, 2));
+                window.draw(shadowPressEnter);
+                window.draw(pressEnter);
+                if (event.key.code == Keyboard::Enter || event.key.code == Keyboard::Return) {
+                    gameOver = false;
+                    score = 0;
+                    inMenu = true;
+                }
+            }
+        }
         window.display();
     }
 
-    // Clean up
-    for (auto g : menuGhosts) delete g;
-    for (auto g : gameGhosts) delete g;
 
+        // Clean up
+        for (auto g : menuGhosts) delete g;
+        for (auto g : gameGhosts) delete g;
+    
     // Stop music if still playing
     stopMenuMusic();
     stopsuperMusic();
