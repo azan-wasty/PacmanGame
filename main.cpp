@@ -63,7 +63,7 @@ void playSuperMusic() {
     }
 
     // Set up the music properties
-   
+
     menuMusic.setVolume(75);   // Adjust volume (0-100)
 
     // Play the music
@@ -155,7 +155,7 @@ vector<Ghost*> createMenuGhosts() {
         ghosts.push_back(g);
     }
     return ghosts;
-}   
+}
 
 void updateDots(vector<Dot>& dots, float dt) {
     for (auto& d : dots) {
@@ -378,7 +378,7 @@ void drawUI(RenderWindow& window, const Font& font, int score, int lives, bool s
 
     // If super mode is active, show timer
     if (superMode) {
-      
+
         int timerSeconds = static_cast<int>(superModeTimer);
         Text superText("SUPER MODE: " + to_string(timerSeconds), font, 30);
         superText.setFillColor(Color::Yellow);
@@ -572,9 +572,9 @@ void MainGame() {
             if (maze.isSuperFood(pacman.GetPosition())) {
                 score += 50;
                 superMode = true;
-				pacman.SuperScale();  // Scale up Pacman for super mode
+                pacman.SuperScale();  // Scale up Pacman for super mode
                 superModeTimer = SUPER_MODE_DURATION;
-				playSuperMusic();
+                playSuperMusic();
 
                 // Change all ghosts to white
                 for (auto g : gameGhosts) {
@@ -582,7 +582,7 @@ void MainGame() {
                 }
             }
             if (!superMode) {
-				pacman.ResetScale();  // Reset Pacman scale when not in super mode
+                pacman.ResetScale();  // Reset Pacman scale when not in super mode
                 stopsuperMusic;
             }
             pacman.Update();
@@ -695,7 +695,7 @@ void MainGame() {
 
     // Stop music if still playing
     stopMenuMusic();
-	stopsuperMusic();
+    stopsuperMusic();
 }
 
 int main() {

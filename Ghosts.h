@@ -1,4 +1,6 @@
-﻿#include "entity.h"
+﻿#pragma once
+
+#include "entity.h"
 #include "animation.h"
 #include "maze.h"
 #include <SFML/Graphics.hpp>
@@ -11,7 +13,7 @@
 #include <cmath>
 
 class Ghost : public Entity {
-private:
+protected:
     sf::Texture texture;
     Animation animation;
     Direction currentDirection;
@@ -33,7 +35,7 @@ public:
         const std::map<Direction, int>& frameIndexes)
         : Entity(x, y, speed),
         animation(0.1f),
-        currentDirection(),
+        currentDirection(LEFT),
         initialPosition(x, y),
         frameWidth(frameWidth),
         frameHeight(frameHeight),
@@ -50,14 +52,16 @@ public:
         sprite.setPosition(position);
         originalColor = sprite.getColor(); // Store the original color
 
-        for (int i = 0; i < 4; ++i) {
+        for (int i = 0; i < frameCount; ++i) {
             animation.addFrame(sf::IntRect(i * frameWidth, 0, frameWidth, frameHeight)); // horizontal layout
         }
 
         std::srand(static_cast<unsigned int>(std::time(nullptr)));
     }
 
-    bool Move(Direction dir, Maze& maze) {
+    virtual ~Ghost() = default;
+
+    virtual bool Move(Direction dir, Maze& maze) {
         Vector2f tempPosition = position;
         float moveDist = speed;
 
@@ -92,11 +96,11 @@ public:
         Update(1.0f / 60.0f);
     }
 
-    void Update(float deltaTime) {
+    virtual void Update(float deltaTime) {
         animation.updateGhost(currentDirection, sprite);
     }
 
-    void Reset() {
+    virtual void Reset() {
         position = initialPosition;
         sprite.setPosition(position);
         currentDirection = LEFT;
@@ -117,17 +121,24 @@ public:
         sprite.setPosition(position);
     }
 
-    sf::Sprite getSprite() const {
+    virtual sf::Sprite getSprite() const {
         return sprite;
     }
 
-    bool GhostCollision(const sf::Vector2f& pacmanPosition) const {
-        return sprite.getGlobalBounds().intersects(sf::FloatRect(pacmanPosition, sf::Vector2f(40, 40)));
+    virtual bool GhostCollision(const sf::Vector2f& pacmanPosition) const {
+        sf::FloatRect pacmanBounds(
+            pacmanPosition.x - 20.f, // center the 40x40 box around pacmanPosition
+            pacmanPosition.y - 20.f,
+            40.f,
+            40.f
+        );
+
+        return sprite.getGlobalBounds().intersects(pacmanBounds);
     }
 
-    void updateAutonomous(Maze& maze) {
+    virtual void updateAutonomous(Maze& maze) {
         float deltaTime = 1.0f / 60.0f;
-        
+
         // Try to move in current direction
         if (!Move(currentDirection, maze)) {
             // If blocked, pick a new valid direction (excluding opposite)
@@ -149,6 +160,10 @@ public:
         }
 
         Update(deltaTime);
+    }
+
+    Direction GetCurrentDirection() const {
+        return currentDirection;
     }
 
     std::vector<Direction> getAvailableDirections(Maze& maze) {
@@ -228,6 +243,14 @@ public:
         return maze.isWalkable(testPos);
     }
 
+    void SuperSpeed() {
+        speed += 1.f;  // Increase speed   
+    }
+
+    void ResetSpeed() {
+        speed -= 1.f;  // Reset speed
+    }
+
     // Set the color of the ghost for super mode
     void setColor(const sf::Color& color) {
         sprite.setColor(color);
@@ -238,3 +261,4 @@ public:
         return originalColor;
     }
 };
+

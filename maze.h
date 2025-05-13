@@ -122,7 +122,7 @@ public:
             float remainingTime = getSuperModeTimeRemaining();
             if (remainingTime < 3.0f) {
                 // Flash between blue and normal color
-                if (static_cast<int>(remainingTime * 5) % 2 == 0) {
+                if (static_cast<int>(remainingTime * 10) % 2 == 0) {
                     drawColor = Color::Blue;
                 }
                 else {
@@ -379,7 +379,14 @@ public:
 
         return { col, row };
     }
-
+	int getCol(Vector2f pos) const {
+        int col = static_cast<int>((pos.x - offset.x) / CELL_SIZE);
+        return col;
+    }
+    int getRows(Vector2f pos) const {
+        int row = static_cast<int>((pos.y - offset.y) / CELL_SIZE);
+		return row;
+    }
     static int getCellSize() { return CELL_SIZE; }
     static int getWidth() { return WIDTH; }
     static int getHeight() { return HEIGHT; }

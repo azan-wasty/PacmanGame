@@ -41,7 +41,7 @@
     <ClInclude Include="Animation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="SUbGhosts.h">
+    <ClInclude Include="SubGhosts.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
