@@ -1,6 +1,7 @@
 #pragma once
 #include <map>
 #include "Animation.h"
+#include "maze.h"
 #include "entity.h"
 
 class Pacman : public Entity {

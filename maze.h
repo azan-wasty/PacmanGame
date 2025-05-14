@@ -29,11 +29,11 @@ private:
         " ###################",
         " #........#........# ",
         " #o##.###.#.###.##o# ",
-        " #.................# ",
+        " #........0........# ",
         " #.##.#.#####.#.##.# ",
         " #....#...#...#....# ",
         " ####.### # ###.#### ",
-        "    #.#   0   #.#    ",
+        "    #.#       #.#    ",
         "#####.# #   # #.#####",
         "     .  #123#  .     ",
         "#####.# ##### #.#####",
@@ -65,7 +65,7 @@ public:
         std::cout << "Maze initialized with offset: (" << offset.x << ", " << offset.y << ")" << std::endl;
     }
 
-    
+
 
     void setSuperMode(bool mode) {
         superMode = mode;
@@ -111,8 +111,8 @@ public:
             }
         }
     }
-    \
-        void draw(RenderWindow& window) {
+    void draw(RenderWindow& window)
+    {
         // Handle super mode color with smooth transition effect
         Color drawColor;
         if (isSuperModeActive()) {
@@ -126,12 +126,12 @@ public:
                     drawColor = Color::Blue;
                 }
                 else {
-                    drawColor =Color:: Yellow;
+                    drawColor = Color::Yellow;
                 }
             }
         }
         else {
-            drawColor =Color:: Blue ;
+            drawColor = Color::Blue;
         }
 
         // Draw timer if in super mode
@@ -215,7 +215,7 @@ public:
         }
     }
 
-   
+
 
     bool foodremains() const { return totalFood > 0; }
 
@@ -379,13 +379,13 @@ public:
 
         return { col, row };
     }
-	int getCol(Vector2f pos) const {
+    int getCol(Vector2f pos) const {
         int col = static_cast<int>((pos.x - offset.x) / CELL_SIZE);
         return col;
     }
     int getRows(Vector2f pos) const {
         int row = static_cast<int>((pos.y - offset.y) / CELL_SIZE);
-		return row;
+        return row;
     }
     static int getCellSize() { return CELL_SIZE; }
     static int getWidth() { return WIDTH; }

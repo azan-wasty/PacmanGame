@@ -1,4 +1,6 @@
-﻿#include "entity.h"
+﻿#pragma once﻿
+#include "entity.h"
+#include "pacman.h" 
 #include "animation.h"
 #include "maze.h"
 #include <SFML/Graphics.hpp>
@@ -56,7 +58,8 @@ public:
 
         std::srand(static_cast<unsigned int>(std::time(nullptr)));
     }
-
+    void setSpeed(float newSpeed) { speed = newSpeed; }
+    float getOriginalSpeed() const { return speed; }
     virtual ~Ghost() = default;
 
     virtual bool Move(Direction dir, Maze& maze) {
@@ -68,6 +71,14 @@ public:
         case LEFT:  tempPosition.x -= moveDist; break;
         case UP:    tempPosition.y -= moveDist; break;
         case DOWN:  tempPosition.y += moveDist; break;
+        }
+
+        float mazeWidth = Maze::getWidth() * Maze::getCellSize() + maze.getOffset().x;
+        if (tempPosition.x < maze.getOffset().x) {
+            tempPosition.x = mazeWidth - sprite.getGlobalBounds().width - 10;
+        }
+        else if (tempPosition.x + sprite.getGlobalBounds().width > mazeWidth - 10) {
+            tempPosition.x = maze.getOffset().x + 10;
         }
 
         if (isValidDirection(maze, dir)) {
@@ -557,13 +568,19 @@ public:
 
 class AmbusherGhost : public Ghost {
 private:
-    const float AMBUSH_WAIT_TIME = 3.0f;  // Seconds to wait at ambush points
-    float ambushTimer;                    // Timer for tracking wait time
-    bool isWaiting;                       // Flag to indicate if ghost is waiting at ambush point
+    bool isPaused;
+    float pauseTimer;
+    const float PAUSE_DURATION = 3.0f;  // 2 seconds pause on 'o' tiles
 
-    // Store all ambush points (coordinates of 'o' in the map)
-    std::vector<sf::Vector2f> ambushPoints;
-    int currentTargetIndex;               // Index of the current ambush point target
+    // Hardcoded 'o' positions from the map (in grid coordinates)
+    std::vector<sf::Vector2i> pausePositions;
+
+    // Maze offset
+    sf::Vector2f mazeOffset;
+
+    // Flag to ensure we only pause once on each 'o' tile
+    sf::Vector2i lastPauseTile;
+    bool hasPausedOnCurrentTile;
 
 public:
     AmbusherGhost(const std::string& spriteSheetPath,
@@ -571,191 +588,339 @@ public:
         float x, float y, float speed, float scale,
         const std::map<Direction, int>& frameIndexes)
         : Ghost(spriteSheetPath, frameCount, frameWidth, frameHeight, x, y, speed, scale, frameIndexes),
-        ambushTimer(0.0f),
-        isWaiting(false),
-        currentTargetIndex(0) {
+        isPaused(false),
+        pauseTimer(0.0f),
+        mazeOffset(60.f, 40.f),  // Setting the maze offset
+        lastPauseTile(-1, -1),
+        hasPausedOnCurrentTile(false)
+    {
+        // Initialize the hardcoded 'o' positions from the map data
+        // Format is {x, y} in grid coordinates (not pixels)
+        pausePositions = {
+            {2, 2},    // Top left o
+            {17, 2},   // Top right o
+            {2, 15},   // Bottom left o
+            {17, 15}   // Bottom right o
+        };
+    }
 
-        // Manually set the coordinates of the ambush points ('o' in the map)
-        // Based on the provided map, these are the 'o' coordinates (converting to pixel coordinates)
-        // The format is: x = column * CELL_SIZE + CELL_SIZE/2, y = row * CELL_SIZE + CELL_SIZE/2
+    void Update(float deltaTime) override {
+        // Call the base class animation update
+        Ghost::Update(deltaTime);
 
-        // First 'o' at (2, 2)
-        ambushPoints.push_back(sf::Vector2f(2 * CELL_SIZE + CELL_SIZE / 2, 2 * CELL_SIZE + CELL_SIZE / 2));
+        // If paused, update the timer
+        if (isPaused) {
+            pauseTimer += deltaTime;
 
-        // Second 'o' at (17, 2)
-        ambushPoints.push_back(sf::Vector2f(17 * CELL_SIZE + CELL_SIZE / 2, 2 * CELL_SIZE + CELL_SIZE / 2));
+            // Resume movement if pause duration has elapsed
+            if (pauseTimer >= PAUSE_DURATION) {
+                isPaused = false;
+                pauseTimer = 0.0f;
 
-        // Third 'o' at (2, 15)
-        ambushPoints.push_back(sf::Vector2f(2 * CELL_SIZE + CELL_SIZE / 2, 15 * CELL_SIZE + CELL_SIZE / 2));
+                // Force a small movement to ensure we break out of the pause state
+                // Move slightly in current direction
+                switch (GetCurrentDirection()) {
+                case UP:    position.y -= 2.0f; break;
+                case DOWN:  position.y += 2.0f; break;
+                case LEFT:  position.x -= 2.0f; break;
+                case RIGHT: position.x += 2.0f; break;
+                }
+                sprite.setPosition(position);
 
-        // Fourth 'o' at (17, 15)
-        ambushPoints.push_back(sf::Vector2f(17 * CELL_SIZE + CELL_SIZE / 2, 15 * CELL_SIZE + CELL_SIZE / 2));
+                // Print debug info
+                std::cout << "Ghost resumed movement at position: ("
+                    << position.x << ", " << position.y << ")" << std::endl;
+            }
+        }
     }
 
     void updateAutonomous(Maze& maze) override {
-        float deltaTime = 1.0f / 60.0f;
-
-        // Check if currently waiting at an ambush point
-        if (isWaiting) {
-            ambushTimer += deltaTime;
-
-            // Continue waiting until timer is up
-            if (ambushTimer < AMBUSH_WAIT_TIME) {
-                // Update animation while waiting
-                Update(deltaTime);
-                return;
-            }
-            else {
-                // Done waiting, resume movement and target the next ambush point
-                isWaiting = false;
-                currentTargetIndex = (currentTargetIndex + 1) % ambushPoints.size();
-            }
-        }
-
-        // Get current position in grid coordinates
-        int currentCellX = static_cast<int>(position.x / CELL_SIZE);
-        int currentCellY = static_cast<int>(position.y / CELL_SIZE);
-
-        // Get current target ambush point
-        sf::Vector2f targetPoint = ambushPoints[currentTargetIndex];
-        int targetCellX = static_cast<int>(targetPoint.x / CELL_SIZE);
-        int targetCellY = static_cast<int>(targetPoint.y / CELL_SIZE);
-
-        // Check if we've reached the current target ambush point
-        if (currentCellX == targetCellX && currentCellY == targetCellY && isAtCellCenter()) {
-            // Start waiting at this ambush point
-            isWaiting = true;
-            ambushTimer = 0.0f;
-            Update(deltaTime);
+        // If paused, just update the timer but don't move
+        if (isPaused) {
+            Update(1.0f / 60.0f);
             return;
         }
 
-        // If not at target, move toward it using A* or simpler pathfinding
-        Direction bestDirection = calculateBestDirection(maze, targetPoint);
+        // Get current cell position, accounting for maze offset
+        int cellX = static_cast<int>((position.x - mazeOffset.x) / CELL_SIZE);
+        int cellY = static_cast<int>((position.y - mazeOffset.y) / CELL_SIZE);
 
-        // Try to move in best direction
-        if (Move(bestDirection, maze)) {
-            // Successfully moved in best direction
+        // If we've moved to a different cell, reset the pause flag for this cell
+        if (cellX != lastPauseTile.x || cellY != lastPauseTile.y) {
+            hasPausedOnCurrentTile = false;
         }
-        else {
-            // If blocked, try alternate directions
-            std::vector<Direction> possibleDirs;
 
-            for (int d = 0; d < 4; ++d) {
-                Direction dir = static_cast<Direction>(d);
-                if (dir == getOpposite(currentDirection)) continue;
+        // Calculate center of cell in pixel coordinates, accounting for maze offset
+        float centerX = (cellX * CELL_SIZE) + (CELL_SIZE / 2) + mazeOffset.x;
+        float centerY = (cellY * CELL_SIZE) + (CELL_SIZE / 2) + mazeOffset.y;
 
-                if (isValidDirection(maze, dir)) {
-                    possibleDirs.push_back(dir);
+        // Calculate distance from cell center
+        float distFromCenterX = std::abs(position.x - centerX);
+        float distFromCenterY = std::abs(position.y - centerY);
+
+        // If we're close to the center of a cell and haven't paused here yet, check if it's a pause position
+        if (!hasPausedOnCurrentTile && distFromCenterX < 5.0f && distFromCenterY < 5.0f) {
+            // Check if the current cell is in our list of pause positions
+            for (const auto& pos : pausePositions) {
+                if (pos.x == cellX && pos.y == cellY) {
+                    // Pause the ghost
+                    isPaused = true;
+                    pauseTimer = 0.0f;
+                    // Center the ghost precisely on the 'o' tile
+                    position.x = centerX;
+                    position.y = centerY;
+                    sprite.setPosition(position);
+
+                    // Mark that we've paused on this tile to prevent repeated pausing
+                    lastPauseTile = sf::Vector2i(cellX, cellY);
+                    hasPausedOnCurrentTile = true;
+
+                    // Print debug info
+                    std::cout << "Ghost paused at position: ("
+                        << position.x << ", " << position.y
+                        << "), cell: (" << cellX << ", " << cellY << ")" << std::endl;
+                    return;
                 }
             }
-
-            if (!possibleDirs.empty()) {
-                // Choose a random valid direction if best direction is blocked
-                currentDirection = possibleDirs[std::rand() % possibleDirs.size()];
-                Move(currentDirection, maze);
-            }
         }
 
-        Update(deltaTime);
+        // Regular movement logic from Ghost class
+        Ghost::updateAutonomous(maze);
     }
 
-    // Calculate the best direction to move toward the target point
-    Direction calculateBestDirection(Maze& maze, sf::Vector2f targetPoint) {
-        // Simplistic approach: choose direction that gets us closest to target
-        std::vector<Direction> possibleDirections;
-        std::vector<float> distances;
-
-        // Check each possible direction
-        for (int d = 0; d < 4; ++d) {
-            Direction dir = static_cast<Direction>(d);
-
-            // Skip the opposite direction (no backtracking)
-            if (dir == getOpposite(currentDirection) && !isAtIntersection(maze)) {
-                continue;
-            }
-
-            // Check if this direction is valid
-            if (isValidDirection(maze, dir)) {
-                // Calculate position after moving in this direction
-                sf::Vector2f newPos = position;
-                switch (dir) {
-                case RIGHT: newPos.x += CELL_SIZE; break;
-                case LEFT:  newPos.x -= CELL_SIZE; break;
-                case UP:    newPos.y -= CELL_SIZE; break;
-                case DOWN:  newPos.y += CELL_SIZE; break;
-                }
-
-                // Calculate distance to target from new position
-                float dx = newPos.x - targetPoint.x;
-                float dy = newPos.y - targetPoint.y;
-                float distance = std::sqrt(dx * dx + dy * dy);
-
-                possibleDirections.push_back(dir);
-                distances.push_back(distance);
-            }
-        }
-
-        // Find direction with shortest distance to target
-        if (!possibleDirections.empty()) {
-            int bestIndex = 0;
-            float minDistance = distances[0];
-
-            for (size_t i = 1; i < distances.size(); ++i) {
-                if (distances[i] < minDistance) {
-                    minDistance = distances[i];
-                    bestIndex = i;
-                }
-            }
-
-            return possibleDirections[bestIndex];
-        }
-
-        // If no valid directions, keep current direction
-        return currentDirection;
-    }
-
-    // Check if ghost is at an intersection (more than one possible direction)
-    bool isAtIntersection(Maze& maze) const {
-        int validDirections = 0;
-
-        for (int d = 0; d < 4; ++d) {
-            Direction dir = static_cast<Direction>(d);
-            Vector2f testPos = position;
-
-            // Move one cell in the given direction
-            switch (dir) {
-            case RIGHT: testPos.x += CELL_SIZE; break;
-            case LEFT:  testPos.x -= CELL_SIZE; break;
-            case UP:    testPos.y -= CELL_SIZE; break;
-            case DOWN:  testPos.y += CELL_SIZE; break;
-            }
-
-            if (maze.isWalkable(testPos)) {
-                validDirections++;
-            }
-        }
-
-        // An intersection has more than 2 valid directions
-        return validDirections > 2;
-    }
-
-    // Helper method to check if ghost is centered enough in a cell
-    bool isAtCellCenter() const {
-        float cellCenterX = std::floor(position.x / CELL_SIZE) * CELL_SIZE + (CELL_SIZE / 2);
-        float cellCenterY = std::floor(position.y / CELL_SIZE) * CELL_SIZE + (CELL_SIZE / 2);
-
-        // Define threshold for being "centered enough" (a small value, e.g., 5 pixels)
-        const float CENTERED_THRESHOLD = 5.0f;
-
-        return (std::abs(position.x - cellCenterX) < CENTERED_THRESHOLD &&
-            std::abs(position.y - cellCenterY) < CENTERED_THRESHOLD);
+    bool isPauseActive() const {
+        return isPaused;
     }
 
     void Reset() override {
         Ghost::Reset();
-        ambushTimer = 0.0f;
-        isWaiting = false;
-        currentTargetIndex = 0; // Reset to target the first ambush point
+        isPaused = false;
+        pauseTimer = 0.0f;
+        lastPauseTile = sf::Vector2i(-1, -1);
+        hasPausedOnCurrentTile = false;
     }
+};
+
+
+class TimeStopGhost : public Ghost {
+private:
+    // Constants for time stop ability
+    const float TIME_STOP_COOLDOWN = 30.0f;    // Seconds between ability uses
+    const float TIME_STOP_DURATION = 3.0f;     // How long Pacman is stopped
+    const float WARNING_DURATION = 2.0f;       // Duration of warning flicker before ability activates
+
+    // Timers
+    float abilityTimer;                        // Tracks cooldown for time stop ability
+    float stopDurationTimer;                   // Tracks how long Pacman has been stopped
+
+    // State flags
+    bool isWarning;                            // True when the ghost is about to use its ability
+    bool isTimeStopActive;                     // True when time stop is currently active
+    float warningBlinkTimer;                   // For flicker effect during warning
+    const float BLINK_SPEED = 0.1f;            // How fast the ghost blinks during warning (seconds)
+
+    // Original color for restoration
+    sf::Color abilityColor;                    // Color when ability is active
+
+    // Reference to pacman (optional, can be passed to update method instead)
+    Pacman* targetPacman;
+
+public:
+    TimeStopGhost(const std::string& spriteSheetPath,
+        int frameCount, int frameWidth, int frameHeight,
+        float x, float y, float speed, float scale,
+        const std::map<Direction, int>& frameIndexes)
+        : Ghost(spriteSheetPath, frameCount, frameWidth, frameHeight, x, y, speed, scale, frameIndexes),
+        abilityTimer(0.0f),
+        stopDurationTimer(0.0f),
+        isWarning(false),
+        isTimeStopActive(false),
+        warningBlinkTimer(0.0f),
+        targetPacman(nullptr)
+    {
+        // Initialize ability color (light blue for time theme)
+        abilityColor = sf::Color(100, 200, 255);
+    }
+
+    // Set the target Pacman
+    void SetTarget(Pacman* pacman) {
+        targetPacman = pacman;
+    }
+
+    void Update(float deltaTime) override {
+        // Call the parent update method first
+        Ghost::Update(deltaTime);
+
+        // Update ability timer
+        abilityTimer += deltaTime;
+
+        // Check if warning phase should start
+        if (!isWarning && !isTimeStopActive && abilityTimer >= TIME_STOP_COOLDOWN - WARNING_DURATION) {
+            isWarning = true;
+            warningBlinkTimer = 0.0f;
+        }
+
+        // Handle warning flicker effect
+        if (isWarning) {
+            warningBlinkTimer += deltaTime;
+
+            // Flicker between original color and ability color (faster as time approaches)
+            float blinkFrequency = BLINK_SPEED * (1.0f - ((TIME_STOP_COOLDOWN - abilityTimer) / WARNING_DURATION));
+            blinkFrequency = std::max(blinkFrequency, BLINK_SPEED); // Don't go slower than minimum speed
+
+            if (static_cast<int>(warningBlinkTimer / blinkFrequency) % 2 == 0) {
+                setColor(originalColor);
+            }
+            else {
+                setColor(abilityColor);
+            }
+
+            // Check if it's time to activate ability
+            if (abilityTimer >= TIME_STOP_COOLDOWN) {
+                ActivateTimeStop();
+            }
+        }
+
+        // Handle active time stop
+        if (isTimeStopActive) {
+            stopDurationTimer += deltaTime;
+
+            // Make sure Pacman remains stopped if we have a reference to him
+            if (targetPacman != nullptr) {
+                // Use Pacman's Stop method with his current direction
+                targetPacman->Stop(targetPacman->GetDirection());
+            }
+
+            // End the time stop when duration is over
+            if (stopDurationTimer >= TIME_STOP_DURATION) {
+                DeactivateTimeStop();
+            }
+        }
+    }
+
+    // Alternative Update method that takes a Pacman reference directly
+    void Update(float deltaTime, Pacman& pacman) {
+        // Store temporary reference for this frame
+        targetPacman = &pacman;
+        Update(deltaTime);
+    }
+
+    // Method to activate the time stop ability
+    void ActivateTimeStop() {
+        isWarning = false;
+        isTimeStopActive = true;
+        stopDurationTimer = 0.0f;
+        setColor(abilityColor);
+
+        // Visual effect - ghost glows with time energy
+        sprite.setColor(sf::Color(abilityColor.r, abilityColor.g, abilityColor.b, 255));
+    }
+
+    // Method to deactivate the time stop
+    void DeactivateTimeStop() {
+        isTimeStopActive = false;
+        abilityTimer = 0.0f; // Reset the cooldown
+        setColor(originalColor);
+    }
+
+    // Check if time stop is currently active
+    bool IsTimeStopActive() const {
+        return isTimeStopActive;
+    }
+
+    // Override collision to handle Pacman stopping on contact
+    bool GhostCollision(const sf::Vector2f& pacmanPosition) const override {
+        bool collision = Ghost::GhostCollision(pacmanPosition);
+
+        // If we're colliding and the time stop isn't already active,
+        // we could potentially trigger the ability immediately
+        // (leaving this commented out as it depends on your game design)
+        /*
+        if (collision && !isTimeStopActive && !isWarning && abilityTimer > TIME_STOP_COOLDOWN * 0.5f) {
+            // Could force ability to activate early on collision
+            // const_cast<TimeStopGhost*>(this)->ActivateTimeStop();
+        }
+        */
+
+        return collision;
+    }
+
+    void Reset() override {
+        Ghost::Reset();
+        abilityTimer = 0.0f;
+        stopDurationTimer = 0.0f;
+        isWarning = false;
+        isTimeStopActive = false;
+        warningBlinkTimer = 0.0f;
+        // Don't need to reset targetPacman as it's a reference
+    }
+
+    // Float representing progress toward ability activation (0.0 to 1.0)
+    float GetAbilityProgress() const {
+        return abilityTimer / TIME_STOP_COOLDOWN;
+    }
+
+    // Forces the ability to activate immediately (for testing or special events)
+    void ForceActivate() {
+        abilityTimer = TIME_STOP_COOLDOWN;
+        isWarning = false;
+        ActivateTimeStop();
+    }
+};
+
+class ChaserGhost : public Ghost {
+private:
+    float rageTriggerTimer;
+    float rageDurationTimer;
+    bool isRaging;
+
+    const float RAGE_TRIGGER_TIME = 20.0f;
+    const float RAGE_DURATION = 2.0f;
+
+public:
+    ChaserGhost(const std::string& spriteSheetPath,
+        int frameCount, int frameWidth, int frameHeight,
+        float x, float y, float speed, float scale,
+        const std::map<Direction, int>& frameIndexes)
+        : Ghost(spriteSheetPath, frameCount, frameWidth, frameHeight, x, y, speed, scale, frameIndexes),
+        rageTriggerTimer(0.0f),
+        rageDurationTimer(0.0f),
+        isRaging(false)
+    {
+        // Ensure the original speed and color are stored
+        setSpeed(speed); // Initializes current speed
+    }
+
+    void Update(float deltaTime) override {
+        Ghost::Update(deltaTime);
+        rageTriggerTimer += deltaTime;
+
+        if (!isRaging && rageTriggerTimer >= RAGE_TRIGGER_TIME) {
+            isRaging = true;
+            rageDurationTimer = 0.0f;
+            setSpeed(getOriginalSpeed() * 3.0f);
+            setColor(sf::Color(255, 60, 60)); // Rage tint
+        }
+
+        if (isRaging) {
+            rageDurationTimer += deltaTime;
+            if (rageDurationTimer >= RAGE_DURATION) {
+                isRaging = false;
+                rageTriggerTimer = 0.0f;
+                setSpeed(speed / 3.0f);             // Reset speed
+                setColor(getOriginalColor());             // Reset color
+            }
+        }
+    }
+
+    void Reset() override {
+        Ghost::Reset();
+        rageTriggerTimer = 0.0f;
+        rageDurationTimer = 0.0f;
+        isRaging = false;
+        setSpeed(speed / 3.0f);
+        setColor(getOriginalColor());
+    }
+
+    bool getIsRaging() const { return isRaging; }
 };
