@@ -1,245 +1,205 @@
-Pac-Man Game 
+Your README is well-structured and content-rich — great job laying everything out in detail. Here's a **refined version** that improves grammar, clarity, formatting, and professional tone while keeping your original structure intact:
 
-A modern C++ implementation of the classic Pac-Man arcade game using SFML graphics library. 
+---
 
-Table of Contents 
+# Pac-Man Game
 
-Overview 
+A modern C++ implementation of the classic Pac-Man arcade game using the SFML graphics library.
 
-Features 
+---
 
-Game Elements 
+## 📌 Table of Contents
 
-Ghost Types 
+* [Overview](#overview)
+* [Features](#features)
+* [Game Elements](#game-elements)
+* [Ghost Types](#ghost-types)
+* [Prerequisites](#prerequisites)
+* [Installation](#installation)
+* [Controls](#controls)
+* [Gameplay](#gameplay)
+* [File Structure](#file-structure)
+* [Creating Custom Levels](#creating-custom-levels)
+* [Troubleshooting](#troubleshooting)
+* [Credits](#credits)
 
-Prerequisites 
+---
 
-Installation 
+## 🕹️ Overview
 
-Controls 
+This is a recreation of the classic Pac-Man arcade game, enhanced with additional features such as multiple ghost types with unique abilities, a super mode for Pac-Man, and a scoring system with persistent high scores.
 
-Gameplay 
+---
 
-File Structure 
+## 🎯 Features
 
-Creating Custom Levels 
+* Main menu with **Start**, **Instructions**, and **Exit** options
+* Interactive countdown before game starts
+* Multiple ghost types with distinct behaviors
+* Super mode activated by power pellets
+* Score tracking with high score persistence
+* Life system with visual indicators
+* Game Over screen with performance-based messages
+* Background music and sound effects
 
-Troubleshooting 
+---
 
-Credits 
+## 🧩 Game Elements
 
-Overview 
+| Element           | Description                                     |
+| ----------------- | ----------------------------------------------- |
+| **Pac-Man**       | Player character, collects dots & avoids ghosts |
+| **Regular Dots**  | Worth 10 points each                            |
+| **Power Pellets** | Worth 50 points; activates super mode           |
+| **Ghosts**        | Enemies with unique chasing behavior            |
+| **Maze**          | Game environment of walls and paths             |
 
-This game is a recreation of the classic Pac-Man arcade game with additional features including multiple ghost types with unique abilities, super mode for Pac-Man, and a scoring system with persistent high scores. 
+---
 
-Features 
+## 👻 Ghost Types
 
-Main menu system with Start, Instructions, and Exit options 
+| Ghost Type     | Ability Description                 |
+| -------------- | ----------------------------------- |
+| **TELEPORTER** | Randomly teleports across the maze  |
+| **RANDOM**     | Moves unpredictably                 |
+| **RAGE**       | Occasionally bursts into high speed |
+| **AMBUSHER**   | Camps near power pellets            |
+| **HERMES**     | Moves very quickly                  |
+| **PHANTOM**    | Has an extended hit radius          |
+| **TIME STOP**  | Can temporarily freeze Pac-Man      |
+| **RING**       | Periodically becomes invisible      |
 
-Interactive countdown before game start 
+---
 
-Multiple unique ghost types with different behaviors 
+## ⚙️ Prerequisites
 
-Super mode when eating power pellets 
+* C++ compiler with **C++11** support or higher
+* **SFML 2.5.0** or higher
+* **CMake 3.10** or higher (optional, but recommended for building)
 
-Score tracking and high score system 
+---
 
-Lives system with visual indicators 
+## 🔧 Installation
 
-Game over screen with customized messages based on performance 
+### Option 1: Using CMake (Recommended)
 
-Background music and sound effects 
+1. Clone the repository:
+   `git clone https://github.com/azan-wasty/PacmanGame`
+2. Install SFML for your OS.
+3. Create and navigate to the build directory:
+   `mkdir build && cd build`
+4. Run CMake:
+   `cmake ..`
+5. Build the project:
+   `make`
+6. Run the game:
+   `./pacman`
 
-Game Elements 
+### Option 2: Manual Compilation
 
-Pac-Man: The player character who must eat all the dots while avoiding ghosts 
+1. Ensure SFML is installed and linked.
+2. Compile:
 
-Regular Dots: Worth 10 points each 
+   ```
+   g++ -o pacman main.cpp Ghost.cpp Maze.cpp Pacman.cpp \
+   -lsfml-graphics -lsfml-window -lsfml-system -lsfml-audio
+   ```
 
-Super Food/Power Pellets: Worth 50 points, activates super mode 
+   *(SFML version 2.5.1 used)*
+3. Run the game:
+   `./pacman`
 
-Ghosts: Enemies that chase Pac-Man; each ghost has unique abilities 
+---
 
-Maze: The environment with walls and pathways 
+## 🎮 Controls
 
-Ghost Types 
+### Menu Navigation
 
-The game features several ghost types, each with unique abilities: 
+* **Up/Down Arrows**: Navigate menu
+* **Enter**: Select option
 
-Ghost Type 
+### In-Game
 
-Ability Description 
+* **Arrow Keys**: Move Pac-Man
+* **Enter**: Return to menu (after Game Over)
 
-TELEPORTER 
+---
 
-Can teleport around the maze randomly 
+## 🧠 Gameplay
 
-RANDOM 
+1. Start the game from the main menu.
+2. Navigate Pac-Man through the maze using arrow keys.
+3. Collect all dots while avoiding ghosts.
+4. Eat power pellets to activate super mode and eat ghosts.
+5. Win the game by clearing all dots.
+6. Lose a life if caught by a ghost. Game ends after all lives are lost.
 
-Moves in unpredictable patterns 
+---
 
-RAGE 
+## 🗂️ File Structure
 
-Has bursts of high speed 
+```
+├── main.cpp              # Main game logic
+├── Entity.h              # Abstract base class
+├── Pacman.h              # Pac-Man character
+├── Ghost.h               # Ghost behaviors
+├── Maze.h                # Maze design and logic
+├── Animation.h           # Sprite animation handling
 
-AMBUSHER 
+├── sounds/               # Sound effects
+│   ├── chomp.wav
+│   ├── death.wav
+│   ├── super.wav
+│   └── menu.wav
 
-Camps near super food to ambush Pac-Man 
+├── sprites/              # Game sprite assets
+│   ├── PACMANLEFT.png
+│   ├── PACMANRIGHT.png
+│   ├── PACMANUP.png
+│   ├── PACMANDOWN.png
+│   └── <GHOSTNAME>.png
 
-HERMES 
+└── ArcadeClassic.ttf     # Game font
+```
 
-Moves very quickly throughout the maze 
+---
 
-PHANTOM 
+## ✏️ Creating Custom Levels
 
-Has an extended hit radius 
+Custom levels are defined in `Maze.cpp`. To modify:
 
-TIME STOP 
+* Edit the character array in the `Maze` constructor
+* Use the following character codes:
 
-Can temporarily freeze Pac-Man 
+  * `#`: Wall
+  * `.`: Regular dot
+  * `o`: Power pellet
+  * `P`: Pac-Man start position
+  * `0-7`: Ghost spawn positions
+  * (space): Walkable space
 
-RING 
+---
 
-Can become invisible periodically 
+## 🛠️ Troubleshooting
 
-Prerequisites 
+| Issue                  | Solution                                                  |
+| ---------------------- | --------------------------------------------------------- |
+| **Missing Font**       | Ensure `ArcadeClassic.ttf` is in the executable directory |
+| **Missing Sprites**    | Verify sprite files exist in the `sprites/` folder        |
+| **SFML Linker Errors** | Confirm SFML is correctly installed and linked            |
 
-C++ compiler with C++11 support or higher 
+---
 
-SFML 2.5.0 or higher 
+## 🙌 Credits
 
-CMake 3.10 or higher (optional, for building) 
+Developed by:
 
-Installation 
+* **Azan Wasty** (24L-2557)
+* **Rana Nauman Iqbal** (24L-2565)
+* **Dawood Majeed** (24L-2538)
 
-Option 1: Using CMake (recommended)  
+**FAST-NUCES Lahore | BDS-2A**
 
-Clone the repository or download the source code https://github.com/azan-wasty/PacmanGame 
+---
 
-Install SFML libraries for your system 
-
-Create a build directory and navigate to it: mkdir build && cd build 
- 
-
-Run CMake: cmake .. 
- 
-
-Build the project: make 
- 
-
-Run the game: ./pacman 
- 
-
-Option 2: Manual Compilation 
-
-Ensure SFML is installed on your system 
-
-Compile the main file with all dependencies: g++ -o pacman main.cpp Ghost.cpp Maze.cpp Pacman.cpp -lsfml-graphics -lsfml-window -lsfml-system -lsfml-audio 
-
-Sfml 2.5.1 used 
- 
-
-Run the game: ./pacman 
- 
-
-Controls 
-
-Menu Navigation: 
-
-Up/Down Arrow Keys: Navigate menu items 
-
-Enter: Select menu item 
-
-Game Controls: 
-
-Arrow Keys: Move Pac-Man up, down, left, right 
-
-Enter: Return to menu (after game over) 
-
-Gameplay 
-
-Start the game from the main menu 
-
-Navigate Pac-Man through the maze using arrow keys 
-
-Eat all dots while avoiding ghosts 
-
-Collect super food to enter super mode and be able to eat ghosts 
-
-When all dots are eaten, you win the game 
-
-If a ghost catches you, you lose a life 
-
-Game ends when all lives are lost 
-
-File Structure 
-
-├── main.cpp               # Main game logic 
-
-├── Entity.h                                               # Main game logic 
-  
-├── Pacman.h               # Pac-Man character implementation 
-├── Ghost.h                # Ghost base class and implementations 
-├── Maze.h                 # Maze implementation 
-
-├── Animation.h             # Sprite Animation implementation 
-
- 
-├── sounds/                # Game sound effects 
-│   ├── chomp.wav          # Dot eating sound 
-│   ├── death.wav          # Death sound 
-│   ├── super.wav          # Super mode sound 
-│   └── menu.wav           # Menu music 
-├── sprites/               # Game sprites 
-│   ├── PACMANLEFT.png     # Pac-Man facing left 
-│   ├── PACMANRIGHT.png    # Pac-Man facing right 
-│   ├── PACMANUP.png       # Pac-Man facing up 
-│   ├── PACMANDOWN.png     # Pac-Man facing down 
-│   └── “GHOSTNAME”.png    # Ghost sprites 
-└── ArcadeClassic.ttf      # Game font 
-  
-
-Creating Custom Levels 
-
-The maze is defined in the Maze.cpp file. To create custom levels: 
-
-Modify the maze array in the Maze constructor 
-
-Use these characters to define the maze:  
-
-#: Wall 
-
-.: Regular dot 
-
-o: Super food 
-
-P: Pac-Man starting position 
-
-0-7: Ghost starting positions 
-
-(space): Empty walkable space 
-
-Troubleshooting 
-
-Common Issues 
-
-Missing Font Error: Make sure "ArcadeClassic.ttf" is in the same directory as the executable 
-
-Error: Could not load font ArcadeClassic.ttf 
-  
-
-Solution: Download and place the ArcadeClassic.ttf font in the game directory 
-
-Missing Sprite Files: Ensure all sprite files are in the correct locations Solution: Check the sprites directory and make sure all required PNG files exist 
-
-SFML Library Not Found: If you get linker errors Solution: Make sure SFML is properly installed and linked in your build system 
-
-Credits 
-
-Azan Wasty (24L-2557) 
-
-Rana Nauman Iqbal (24L-2565) 
-
-Dawood Majeed (24L-2538) 
-
-BDS-2A 
+Let me know if you'd like this turned into a proper [`README.md`](f) file you can paste directly into your GitHub repo.
