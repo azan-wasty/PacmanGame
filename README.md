@@ -1,6 +1,4 @@
-Your README is well-structured and content-rich — great job laying everything out in detail. Here's a **refined version** that improves grammar, clarity, formatting, and professional tone while keeping your original structure intact:
 
----
 
 # Pac-Man Game
 
@@ -200,6 +198,3 @@ Developed by:
 
 **FAST-NUCES Lahore | BDS-2A**
 
----
-
-Let me know if you'd like this turned into a proper [`README.md`](f) file you can paste directly into your GitHub repo.
