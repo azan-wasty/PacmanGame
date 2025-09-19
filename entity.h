@@ -13,7 +13,7 @@ protected:
     float speed;
 
 public:
-    
+	Entity() : position(0, 0), speed(0) {}
 	Entity(float x, float y, float spd) : position(x, y), speed(spd) {
 		sprite.setPosition(position);
 	}

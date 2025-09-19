@@ -14,6 +14,8 @@ private:
     float collisionOffset = 6.f; // Adjust as needed for accurate collision
 
 public:
+    Pacman ()
+    {}
     Pacman(const map<Direction, string>& spriteSheetPaths,
         int frameCount, int frameWidth, int frameHeight,
         float x, float y, float spd)

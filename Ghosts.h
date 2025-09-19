@@ -1,4 +1,5 @@
-﻿#pragma once﻿
+﻿
+#pragma once﻿
 #include "entity.h"
 #include "pacman.h" 
 #include "animation.h"
